@@ -9,6 +9,11 @@
 # Playwright
 .playwright-mcp/
 
+# Test data and dev scripts
+data/
+frontend/scripts/
+frontend/screenshots/
+
 # Node
 node_modules/
 
