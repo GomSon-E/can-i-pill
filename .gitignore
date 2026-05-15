@@ -1,0 +1,16 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude
+.claude/
+
+# Playwright
+.playwright-mcp/
+
+# Node
+node_modules/
+
+# Build
+dist/
