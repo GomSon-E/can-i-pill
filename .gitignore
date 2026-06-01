@@ -14,6 +14,16 @@ data/
 frontend/scripts/
 frontend/screenshots/
 
+# Docs (deliverables generated/managed outside VCS)
+docs/
+
+# Caches
+.cache/
+
+# Python
+__pycache__/
+*.py[cod]
+
 # Node
 node_modules/
 
