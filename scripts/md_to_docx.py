@@ -33,7 +33,7 @@ from docx.shared import Cm, Pt, RGBColor, Twips
 # ========== Configuration Constants ==========
 # MD 파일의 경로를 지정하는 상수 (필요에 따라 수정)
 MD_INPUT_DIR = Path("../docs/v2")  # 마크다운 파일이 있는 디렉토리
-MD_INPUT_FILE = "화면 설계서.md"  # 기본 파일명 (None이면 첫 번째 .md 파일 사용)
+MD_INPUT_FILE = "약-영양제-음식 상호작용 Agent 테스트 결과 보고서.md"  # 기본 파일명 (None이면 첫 번째 .md 파일 사용)
 
 # 페이지 크기: A4 (한국 환경 기본) — 단위는 twip (1cm ≈ 567 twip)
 PAGE_WIDTH_TWIP = 11906   # A4 width

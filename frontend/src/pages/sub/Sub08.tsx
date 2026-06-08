@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StatusBar from '../../components/StatusBar'
 
@@ -12,17 +12,32 @@ let nextId = 1
 
 export default function Sub08() {
   const navigate = useNavigate()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
   const [supplements, setSupplements] = useState<Supplement[]>([])
   const [textInput, setTextInput] = useState('')
 
-  const handleScanLabel = async () => {
+  const handleCapture = () => {
+    cameraInputRef.current?.click()
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
     try {
-      const res = await fetch('/label', { method: 'POST' })
+      const formData = new FormData()
+      formData.append('image', file)
+      const res = await fetch('/label', { method: 'POST', body: formData })
       const data = await res.json()
-      setSupplements(prev => [...prev, { id: nextId++, name: data.name, ingredients: data.ingredients }])
+      const ingredients = data.nutrients?.map((n: any) => `${n.ingredient} ${n.amount}${n.unit}`) ?? []
+      setSupplements(prev => [...prev, { id: nextId++, name: data.name, ingredients }])
     } catch {
       setSupplements(prev => [...prev, { id: nextId++, name: '비타민C 1000mg', ingredients: ['아스코르브산 1000mg'] }])
     }
+  }
+
+  const handleScanLabel = () => {
+    cameraInputRef.current?.click()
   }
 
   const handleTextAdd = () => {
@@ -53,11 +68,20 @@ export default function Sub08() {
     <div
       data-testid="page-sub-08"
       style={{
-        width: 360, height: 780, backgroundColor: '#fff',
+        width: 360, height: 780, backgroundColor: '#fff', position: 'relative',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
         fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       }}
     >
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        data-testid="camera-input"
+      />
       <StatusBar />
 
       {/* 앱 헤더 */}

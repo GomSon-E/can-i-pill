@@ -273,13 +273,13 @@
 - [x] 촬영 후 `FormData`에 담아 `POST /ocr` 전송, 결과를 `ocrStore`에 저장 후 `/sub-07` 이동
 
 #### 7-2. Sub03 — 처방전 교체 (카메라 촬영)
-- [ ] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거
-- [ ] 촬영 후 `FormData`로 `POST /ocr` 전송, `ocrStore` 저장 → `/sub-07` 이동
+- [x] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거
+- [x] 촬영 후 `FormData`로 `POST /ocr` 전송, `ocrStore` 저장 → `/sub-07` 이동
 
 #### 7-3. Sub08 — 영양제 추가 (카메라 촬영)
-- [ ] "영양제 라벨 사진 찍기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
-- [ ] 촬영 후 `FormData`로 `POST /label` 전송, 응답의 `name`/`nutrients`로 폼 자동 채움
-- [ ] 기존 하드코딩 fallback 제거
+- [x] "영양제 라벨 사진 찍기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
+- [x] 촬영 후 `FormData`로 `POST /label` 전송, 응답의 `name`/`nutrients`로 폼 자동 채움
+- [x] 기존 하드코딩 fallback 제거
 
 ---
 

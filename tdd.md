@@ -8,7 +8,7 @@ Always follow the instructions in plan.md. When I say "go", find the next unchec
 - Frontend: React (Vite)
 - Backend: FastAPI (Python)
 - DB: Supabase (PostgreSQL)
-- AI: Mock 처리 (OCR, VLM, Agent는 추후 실제 API로 교체)
+- AI: Phase 5까지는 Mock, Phase 6부터 Gemini 실제 연동 (`gemini-3.1-flash-lite`)
 
 ## Project Structure
 ```
@@ -17,13 +17,15 @@ igeomwoyak/
 │   ├── src/
 │   │   ├── pages/     # 화면 컴포넌트 (INTRO, OB, MAIN, SUB)
 │   │   ├── components/# 공통 컴포넌트
-│   │   ├── api/       # FastAPI 호출 함수
-│   │   ├── mocks/     # Mock 데이터 (mockData.js)
+│   │   ├── store/     # OCR/분석 결과 상태 저장
 │   │   └── tests/     # 테스트 파일
 ├── backend/           # FastAPI 앱
-│   ├── main.py
-│   ├── routers/       # API 엔드포인트
-│   ├── models/        # Pydantic 모델
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── routers/   # API 엔드포인트
+│   │   ├── db.py      # Supabase 연결
+│   │   └── store.py   # 테스트/개발용 저장소
+│   ├── requirements.txt
 │   └── tests/         # pytest 테스트
 ├── CLAUDE.md
 └── plan.md
@@ -31,8 +33,6 @@ igeomwoyak/
 
 ## Key Documents
 - `plan.md` — 구현할 테스트 체크리스트 (항상 여기서 다음 작업 찾기)
-- `user_scenario.md` — 유저 시나리오 + DB 스키마 + API 목록
-- `igeomwoyak_screen_spec.md` — 화면 설계서
 
 ## Test Commands
 ```bash
@@ -46,8 +46,12 @@ cd backend && pytest
 npm run test:all
 ```
 
-## Mock Data Location
-`frontend/src/mocks/mockData.js`
+## AI Implementation Notes
+- Legacy Mock endpoints live in `backend/app/routers/mock_ai.py`.
+- Phase 6 replaces `/ocr`, `/label`, `/analyze` behavior with Gemini-backed implementations.
+- Gemini model: `gemini-3.1-flash-lite`
+- Required env var: `GEMINI_API_KEY`
+- Keep API response schemas aligned with the active unchecked item in `plan.md`.
 
 ---
 
@@ -99,12 +103,15 @@ You are a senior software engineer who follows Kent Beck's Test-Driven Developme
 - Keep components/functions small and focused on a single responsibility
 - Minimize state and side effects
 
-# MOCK RULES
+# AI RULES
 
-- AI 기능(OCR, VLM, Agent 분석)은 반드시 Mock으로 처리
-- Mock 함수는 `frontend/src/mocks/mockData.js`에서 관리
-- Mock 응답은 user_scenario.md의 Mock 데이터 정의를 따름
-- 나중에 실제 API로 교체할 때 Mock 함수만 교체하면 되도록 인터페이스 일관성 유지
+- Completed Phase 1-5 behavior may keep using Mock endpoints unless the current `plan.md` item requires changing it.
+- For Phase 6 and later, implement real Gemini calls for OCR, label extraction, and interaction analysis according to `plan.md`.
+- Image endpoints must accept multipart image uploads once their Phase 6/7 checklist items are active.
+- `/analyze` must use the new schema when implementing Phase 6/8:
+  `{ level, doctorOpinion: { summary, detail }, pharmacistOpinion: { summary, detail }, alternatives }`
+- `level` must always be one of `safe`, `caution`, or `danger`; do not introduce `warning`.
+- When JSON structured output fails, follow the `plan.md` retry requirement before returning an error.
 
 # EXAMPLE WORKFLOW
 

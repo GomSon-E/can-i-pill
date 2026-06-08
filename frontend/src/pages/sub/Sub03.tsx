@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ocrStore } from '../../store/ocrStore'
 import StatusBar from '../../components/StatusBar'
@@ -10,16 +11,40 @@ const DELETING_MEDS = [
 
 export default function Sub03() {
   const navigate = useNavigate()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const handleSave = async () => {
-    const res = await fetch('/ocr', { method: 'POST' })
+  const handleCapture = () => {
+    cameraInputRef.current?.click()
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('image', file)
+
+    const res = await fetch('/ocr', { method: 'POST', body: formData })
     const data = await res.json()
     ocrStore.result = data
     navigate('/sub-07')
   }
 
+  const handleSave = () => {
+    cameraInputRef.current?.click()
+  }
+
   return (
     <div data-testid="page-sub-03" style={{ width: 360, height: 780, backgroundColor: '#fff', display: 'flex', flexDirection: 'column', overflow: 'hidden', fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        data-testid="camera-input"
+      />
       <StatusBar />
 
       <div style={{ height: 52, display: 'flex', alignItems: 'center', paddingLeft: 8, paddingRight: 22, flexShrink: 0, borderBottom: '1px solid #F0F0F3' }}>
