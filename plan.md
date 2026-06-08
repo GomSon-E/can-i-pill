@@ -286,10 +286,10 @@
 ## Phase 8. AI 연동 스키마 통일 — 프론트엔드
 
 #### 8-1. analyzeStore 스키마 업데이트
-- [ ] `analyzeStore` 타입을 새 스키마로 변경
+- [x] `analyzeStore` 타입을 새 스키마로 변경
   - `summary: string`, `detail: string` → `doctorOpinion: { summary, detail }`, `pharmacistOpinion: { summary, detail }`
   - `level: 'safe' | 'caution' | 'danger'` 유지
 
 #### 8-2. Main05 화면 업데이트
-- [ ] `doctorOpinion.summary` / `pharmacistOpinion.summary` 표시
+- [x] `doctorOpinion.summary` / `pharmacistOpinion.summary` 표시
 - [ ] "자세히 보기" 토글 시 `doctorOpinion.detail` / `pharmacistOpinion.detail` 표시

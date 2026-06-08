@@ -157,7 +157,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
 
   it('MAIN-04 진입 시 data-testid="page-main-04" 렌더', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', summary: '안전합니다', alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
@@ -166,7 +166,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
 
   it('MAIN-04 진입 시 POST /analyze 호출', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', summary: '안전합니다', alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
     renderPage('/main-04')
@@ -177,7 +177,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
 
   it('MAIN-04 진입 시 POST /history 호출', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', summary: '안전합니다', alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
     renderPage('/main-04')
@@ -188,7 +188,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
 
   it('MAIN-04 분석 완료 후 MAIN-05로 이동', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', summary: '안전합니다', alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
@@ -270,7 +270,7 @@ describe('S-16: 분석 결과 — 안전', () => {
   it('level: safe 시 "드셔도 괜찮아요" 표시', async () => {
     // set result in store via Main04 navigate flow
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', summary: '안전합니다', alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
@@ -279,14 +279,14 @@ describe('S-16: 분석 결과 — 안전', () => {
     })
     // Now render main-05 which reads from store
     const { analyzeStore } = await import('../store/analyzeStore')
-    analyzeStore.result = { level: 'safe', summary: '안전합니다', alternatives: [] }
+    analyzeStore.result = { level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }
     renderPage('/main-05')
     expect(screen.getByText('드셔도 괜찮아요')).toBeInTheDocument()
   })
 
   it('level: safe 시 대안 섹션 미표시', async () => {
     const { analyzeStore } = await import('../store/analyzeStore')
-    analyzeStore.result = { level: 'safe', summary: '안전합니다', alternatives: [] }
+    analyzeStore.result = { level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }
     renderPage('/main-05')
     expect(screen.queryByText(/대신 이런 건/)).not.toBeInTheDocument()
   })
@@ -297,7 +297,7 @@ describe('S-17: 분석 결과 — 주의', () => {
   beforeEach(async () => {
     mockNavigate.mockClear()
     const { analyzeStore } = await import('../store/analyzeStore')
-    analyzeStore.result = { level: 'caution', summary: '주의하세요', alternatives: ['도라지청'] }
+    analyzeStore.result = { level: 'caution', doctorOpinion: { summary: '주의하세요', detail: '주의하세요' }, pharmacistOpinion: { summary: '주의하세요', detail: '주의하세요' }, alternatives: ['도라지청'] }
   })
 
   it('level: caution 시 "조심해서 드셔야 해요" 표시', () => {
@@ -316,7 +316,7 @@ describe('S-18: 분석 결과 — 위험', () => {
   beforeEach(async () => {
     mockNavigate.mockClear()
     const { analyzeStore } = await import('../store/analyzeStore')
-    analyzeStore.result = { level: 'danger', summary: '위험합니다', alternatives: ['도라지청'] }
+    analyzeStore.result = { level: 'danger', doctorOpinion: { summary: '위험합니다', detail: '위험합니다' }, pharmacistOpinion: { summary: '위험합니다', detail: '위험합니다' }, alternatives: ['도라지청'] }
   })
 
   it('level: danger 시 "드시면 안 돼요" 표시', () => {
@@ -340,7 +340,7 @@ describe('S-19: 분석 결과 — 가족 공유', () => {
   beforeEach(async () => {
     mockNavigate.mockClear()
     const { analyzeStore } = await import('../store/analyzeStore')
-    analyzeStore.result = { level: 'caution', summary: '주의하세요', alternatives: [] }
+    analyzeStore.result = { level: 'caution', doctorOpinion: { summary: '주의하세요', detail: '주의하세요' }, pharmacistOpinion: { summary: '주의하세요', detail: '주의하세요' }, alternatives: [] }
   })
   afterEach(() => { vi.unstubAllGlobals() })
 

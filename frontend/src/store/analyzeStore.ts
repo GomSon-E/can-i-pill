@@ -1,6 +1,13 @@
 export interface AnalyzeResult {
   level: 'safe' | 'caution' | 'danger'
-  summary: string
+  doctorOpinion: {
+    summary: string
+    detail: string
+  }
+  pharmacistOpinion: {
+    summary: string
+    detail: string
+  }
   alternatives: string[]
 }
 

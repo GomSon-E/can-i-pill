@@ -48,7 +48,7 @@ export default function Main05() {
     )
   }
 
-  const { level, summary, alternatives } = result
+  const { level, doctorOpinion, pharmacistOpinion, alternatives } = result
   const banner = getBannerConfig(level)
   const showAlternatives = level === 'caution' || level === 'danger'
   const showExpertButton = level === 'danger'
@@ -57,7 +57,7 @@ export default function Main05() {
     try {
       await navigator.share({
         title: '캔아이필 분석 결과',
-        text: `${banner.label}: ${summary}`,
+        text: `${banner.label}: ${doctorOpinion.summary}`,
       })
     } catch {
       // ignore
@@ -138,7 +138,7 @@ export default function Main05() {
             color: '#3F4046',
             lineHeight: 1.5,
           }}>
-            {summary}
+            {doctorOpinion.summary}
           </div>
 
           {/* 대안 카드 */}
