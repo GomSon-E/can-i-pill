@@ -226,3 +226,70 @@
 - [x] POST /ocr — [MOCK] 처방전 OCR 결과 반환
 - [x] POST /label — [MOCK] 영양제 라벨 VLM 결과 반환
 - [x] POST /analyze — [MOCK] 약물 상호작용 분석 결과 반환
+
+---
+
+## Phase 6. AI 실제 연동 — 백엔드
+
+#### 6-1. 의존성 및 환경
+- [x] `requirements.txt`에 `google-genai` 추가 및 `import google.genai` 성공 테스트
+
+#### 6-2. 처방전 OCR 실제 연동
+- [ ] `POST /ocr`에 이미지(multipart) 없이 호출 시 422 반환
+- [ ] `POST /ocr`에 처방전 이미지 전송 시 Gemini 호출, 약품명/투약량/횟수/일수/용법/주의사항 포함 JSON 반환
+  - 응답 스키마: `{ drugs: [{ name, dosage, frequency, days, usage, cautions }] }`
+  - 모델: AI Agent와 동일 모델 (`gemini-3.1-flash-lite`)
+  - 환경변수 `GEMINI_API_KEY` 사용
+
+#### 6-3. 영양제 라벨 VLM 실제 연동
+- [ ] `POST /label`에 이미지(multipart) 없이 호출 시 422 반환
+- [ ] `POST /label`에 영양제 라벨 이미지 전송 시 Gemini 호출, 제품명/영양 성분 반환
+  - 응답 스키마: `{ name, nutrients: [{ ingredient, amount, unit }] }`
+  - 절대 함량만 추출 (비율 % 제외), 천 단위 쉼표 제거
+  - 모델: `gemini-3.1-flash-lite`
+
+#### 6-4. 약물-영양제-음식 상호작용 AI Agent 실제 연동
+- [ ] `POST /analyze` body `{ question, context }` 전송 시 Gemini 호출, 새 스키마로 응답 반환
+  - 응답 스키마:
+    ```json
+    {
+      "level": "safe | caution | danger",
+      "doctorOpinion": { "summary": "...", "detail": "..." },
+      "pharmacistOpinion": { "summary": "...", "detail": "..." },
+      "alternatives": ["..."]
+    }
+    ```
+  - 모델: `gemini-3.1-flash-lite`
+  - JSON 구조화 실패 시 재시도 (최대 2회)
+- [ ] `level` 값이 항상 `safe | caution | danger` 중 하나임을 단언
+- [ ] 기존 테스트의 `"warning"` → `"caution"` 수정 (test_mock_ai.py 버그 수정)
+
+---
+
+## Phase 7. 카메라 촬영 기능 — 프론트엔드
+
+#### 7-1. Sub02 — 처방전 추가 (카메라 촬영)
+- [ ] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
+- [ ] 촬영 후 `FormData`에 담아 `POST /ocr` 전송, 결과를 `ocrStore`에 저장 후 `/sub-07` 이동
+
+#### 7-2. Sub03 — 처방전 교체 (카메라 촬영)
+- [ ] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거
+- [ ] 촬영 후 `FormData`로 `POST /ocr` 전송, `ocrStore` 저장 → `/sub-07` 이동
+
+#### 7-3. Sub08 — 영양제 추가 (카메라 촬영)
+- [ ] "영양제 라벨 사진 찍기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
+- [ ] 촬영 후 `FormData`로 `POST /label` 전송, 응답의 `name`/`nutrients`로 폼 자동 채움
+- [ ] 기존 하드코딩 fallback 제거
+
+---
+
+## Phase 8. AI 연동 스키마 통일 — 프론트엔드
+
+#### 8-1. analyzeStore 스키마 업데이트
+- [ ] `analyzeStore` 타입을 새 스키마로 변경
+  - `summary: string`, `detail: string` → `doctorOpinion: { summary, detail }`, `pharmacistOpinion: { summary, detail }`
+  - `level: 'safe' | 'caution' | 'danger'` 유지
+
+#### 8-2. Main05 화면 업데이트
+- [ ] `doctorOpinion.summary` / `pharmacistOpinion.summary` 표시
+- [ ] "자세히 보기" 토글 시 `doctorOpinion.detail` / `pharmacistOpinion.detail` 표시
