@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { analyzeStore } from '../../store/analyzeStore'
 import type { AnalyzeResult } from '../../store/analyzeStore'
@@ -39,6 +40,7 @@ function getBannerConfig(level: AnalyzeResult['level']): BannerConfig {
 export default function Main05() {
   const navigate = useNavigate()
   const result = analyzeStore.result
+  const [showDetail, setShowDetail] = useState(false)
 
   if (!result) {
     return (
@@ -128,17 +130,82 @@ export default function Main05() {
         </div>
 
         <div style={{ paddingLeft: 22, paddingRight: 22, paddingTop: 18 }}>
-          {/* 요약 */}
-          <div style={{
-            backgroundColor: '#F8F8FA',
-            borderRadius: 12,
-            padding: '12px 14px',
-            marginBottom: 16,
-            fontSize: 14,
-            color: '#3F4046',
-            lineHeight: 1.5,
-          }}>
-            {doctorOpinion.summary}
+          {/* 의사 의견 */}
+          <div style={{ marginBottom: 20 }}>
+            <button
+              onClick={() => setShowDetail(!showDetail)}
+              style={{
+                width: '100%',
+                backgroundColor: '#F8F8FA',
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginBottom: showDetail ? 12 : 0,
+                fontSize: 14,
+                color: '#3F4046',
+                lineHeight: 1.5,
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span><strong>의사 의견:</strong> {doctorOpinion.summary}</span>
+              <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
+            </button>
+            {showDetail && (
+              <div style={{
+                backgroundColor: '#F0F0F0',
+                borderRadius: 12,
+                padding: '12px 14px',
+                fontSize: 13,
+                color: '#666',
+                lineHeight: 1.5,
+              }}>
+                {doctorOpinion.detail}
+              </div>
+            )}
+          </div>
+
+          {/* 약사 의견 */}
+          <div style={{ marginBottom: 16 }}>
+            <button
+              onClick={() => setShowDetail(!showDetail)}
+              style={{
+                width: '100%',
+                backgroundColor: '#F8F8FA',
+                borderRadius: 12,
+                padding: '12px 14px',
+                marginBottom: showDetail ? 12 : 0,
+                fontSize: 14,
+                color: '#3F4046',
+                lineHeight: 1.5,
+                border: 'none',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'inherit',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <span><strong>약사 의견:</strong> {pharmacistOpinion.summary}</span>
+              <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
+            </button>
+            {showDetail && (
+              <div style={{
+                backgroundColor: '#F0F0F0',
+                borderRadius: 12,
+                padding: '12px 14px',
+                fontSize: 13,
+                color: '#666',
+                lineHeight: 1.5,
+              }}>
+                {pharmacistOpinion.detail}
+              </div>
+            )}
           </div>
 
           {/* 대안 카드 */}

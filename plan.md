@@ -292,4 +292,4 @@
 
 #### 8-2. Main05 화면 업데이트
 - [x] `doctorOpinion.summary` / `pharmacistOpinion.summary` 표시
-- [ ] "자세히 보기" 토글 시 `doctorOpinion.detail` / `pharmacistOpinion.detail` 표시
+- [x] "자세히 보기" 토글 시 `doctorOpinion.detail` / `pharmacistOpinion.detail` 표시
