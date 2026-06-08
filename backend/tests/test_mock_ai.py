@@ -4,8 +4,14 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_post_ocr_returns_mock_prescription():
+def test_post_ocr_without_image_returns_422():
     response = client.post("/ocr")
+    assert response.status_code == 422
+
+
+def test_post_ocr_returns_mock_prescription():
+    with open("backend/tests/dummy_image.png", "rb") as f:
+        response = client.post("/ocr", files={"image": f})
     assert response.status_code == 200
     data = response.json()
     assert "name" in data

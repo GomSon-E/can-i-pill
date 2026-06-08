@@ -235,7 +235,7 @@
 - [x] `requirements.txt`에 `google-genai` 추가 및 `import google.genai` 성공 테스트
 
 #### 6-2. 처방전 OCR 실제 연동
-- [ ] `POST /ocr`에 이미지(multipart) 없이 호출 시 422 반환
+- [x] `POST /ocr`에 이미지(multipart) 없이 호출 시 422 반환
 - [ ] `POST /ocr`에 처방전 이미지 전송 시 Gemini 호출, 약품명/투약량/횟수/일수/용법/주의사항 포함 JSON 반환
   - 응답 스키마: `{ drugs: [{ name, dosage, frequency, days, usage, cautions }] }`
   - 모델: AI Agent와 동일 모델 (`gemini-3.1-flash-lite`)

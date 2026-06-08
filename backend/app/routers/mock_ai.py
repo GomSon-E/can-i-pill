@@ -1,5 +1,5 @@
 import itertools
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -60,7 +60,7 @@ _OCR_MOCKS = itertools.cycle([
 
 
 @router.post("/ocr")
-def ocr():
+def ocr(image: UploadFile = File(...)):
     return next(_OCR_MOCKS)
 
 
