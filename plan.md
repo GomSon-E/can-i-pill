@@ -269,8 +269,8 @@
 ## Phase 7. 카메라 촬영 기능 — 프론트엔드
 
 #### 7-1. Sub02 — 처방전 추가 (카메라 촬영)
-- [ ] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
-- [ ] 촬영 후 `FormData`에 담아 `POST /ocr` 전송, 결과를 `ocrStore`에 저장 후 `/sub-07` 이동
+- [x] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거 (카메라 전용)
+- [x] 촬영 후 `FormData`에 담아 `POST /ocr` 전송, 결과를 `ocrStore`에 저장 후 `/sub-07` 이동
 
 #### 7-2. Sub03 — 처방전 교체 (카메라 촬영)
 - [ ] "처방전 촬영하기" 탭 시 `input[type=file accept="image/*" capture="environment"]` 트리거

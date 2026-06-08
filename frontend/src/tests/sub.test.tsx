@@ -130,17 +130,37 @@ describe('S-21: 처방전 추가', () => {
     expect(screen.getByTestId('page-sub-02')).toBeInTheDocument()
   })
 
-  it('Sub02 "처방전 촬영하기" 버튼 탭 시 POST /ocr 호출 후 /sub-04 로 이동한다', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ drugs: ['메트포르민'] }) })
+  it('Sub02 카메라 파일 입력이 숨겨진 상태로 존재한다', () => {
+    renderPage('/sub-02')
+    const fileInput = screen.getByTestId('camera-input') as HTMLInputElement
+    expect(fileInput).toBeInTheDocument()
+    expect(fileInput.type).toBe('file')
+    expect(fileInput.accept).toBe('image/*')
+    expect(fileInput.hasAttribute('capture')).toBe(true)
+    expect(fileInput.style.display).toBe('none')
+  })
+
+  it('Sub02 "처방전 촬영하기" 버튼 탭 시 파일 입력이 트리거된다', async () => {
+    renderPage('/sub-02')
+    const fileInput = screen.getByTestId('camera-input') as HTMLInputElement
+    const clickSpy = vi.spyOn(fileInput, 'click')
+    await userEvent.click(screen.getByRole('button', { name: /처방전 촬영/ }))
+    expect(clickSpy).toHaveBeenCalled()
+  })
+
+  it('Sub02 파일 선택 시 FormData로 POST /ocr 호출 후 /sub-07 로 이동한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ name: '내과', drugs: [{ name: '메트포르민' }] }) })
     vi.stubGlobal('fetch', fetchMock)
     renderPage('/sub-02')
-    await userEvent.click(screen.getByRole('button', { name: /처방전 촬영/ }))
+    const fileInput = screen.getByTestId('camera-input') as HTMLInputElement
+    const file = new File(['dummy'], 'prescription.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         expect.stringContaining('/ocr'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) })
       )
-      expect(mockNavigate).toHaveBeenCalledWith('/sub-04')
+      expect(mockNavigate).toHaveBeenCalledWith('/sub-07')
     })
   })
 })

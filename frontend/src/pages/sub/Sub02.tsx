@@ -1,12 +1,24 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ocrStore } from '../../store/ocrStore'
 import StatusBar from '../../components/StatusBar'
 
 export default function Sub02() {
   const navigate = useNavigate()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const handleCapture = async () => {
-    const res = await fetch('/ocr', { method: 'POST' })
+  const handleCapture = () => {
+    cameraInputRef.current?.click()
+  }
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const formData = new FormData()
+    formData.append('image', file)
+
+    const res = await fetch('/ocr', { method: 'POST', body: formData })
     const data = await res.json()
     ocrStore.result = data
     navigate('/sub-07')
@@ -58,6 +70,16 @@ export default function Sub02() {
           <span style={{ fontSize: 13, color: '#54555C' }}>네 모서리가 모두 보이도록</span>
         </div>
       </div>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        data-testid="camera-input"
+      />
 
       <div style={{ padding: '12px 22px 22px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
