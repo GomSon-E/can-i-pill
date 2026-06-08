@@ -26,11 +26,18 @@ _ANALYZE_MOCKS = itertools.cycle([
 _LABEL_MOCKS = itertools.cycle([
     {
         "name": "비타민C 1000mg",
-        "ingredients": ["아스코르브산 1000mg", "히아루론산"],
+        "nutrients": [
+            {"ingredient": "아스코르브산", "amount": "1000", "unit": "mg"},
+            {"ingredient": "히아루론산", "amount": "50", "unit": "mg"},
+        ],
     },
     {
         "name": "홍삼정 EX",
-        "ingredients": ["홍삼농축액 70%", "진세노사이드 6mg", "비타민C 50mg"],
+        "nutrients": [
+            {"ingredient": "홍삼농축액", "amount": "70", "unit": "mg"},
+            {"ingredient": "진세노사이드", "amount": "6", "unit": "mg"},
+            {"ingredient": "비타민C", "amount": "50", "unit": "mg"},
+        ],
     },
 ])
 

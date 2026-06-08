@@ -55,8 +55,24 @@ def test_post_label_returns_mock_supplement():
     assert response.status_code == 200
     data = response.json()
     assert "name" in data
-    assert "ingredients" in data
-    assert isinstance(data["ingredients"], list)
+    assert "nutrients" in data
+    assert isinstance(data["nutrients"], list)
+    assert len(data["nutrients"]) > 0
+
+
+def test_post_label_returns_new_schema():
+    with open("backend/tests/dummy_image.png", "rb") as f:
+        response = client.post("/label", files={"image": f})
+    assert response.status_code == 200
+    data = response.json()
+    assert "name" in data
+    assert "nutrients" in data
+    assert isinstance(data["nutrients"], list)
+    assert len(data["nutrients"]) > 0
+    nutrient = data["nutrients"][0]
+    assert "ingredient" in nutrient
+    assert "amount" in nutrient
+    assert "unit" in nutrient
 
 
 def test_post_analyze_returns_mock_analysis():
