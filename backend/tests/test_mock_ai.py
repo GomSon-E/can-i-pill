@@ -83,10 +83,10 @@ def test_post_analyze_returns_mock_analysis():
     assert response.status_code == 200
     data = response.json()
     assert "level" in data
-    assert "summary" in data
+    assert "doctorOpinion" in data
+    assert "pharmacistOpinion" in data
     assert "alternatives" in data
-    assert "detail" in data
-    assert data["level"] in ["safe", "warning", "danger"]
+    assert data["level"] in ["safe", "caution", "danger"]
 
 
 def test_post_analyze_reflects_question():
@@ -98,4 +98,25 @@ def test_post_analyze_reflects_question():
     assert response.status_code == 200
     # The response should be meaningful
     data = response.json()
-    assert len(data["summary"]) > 0
+    assert len(data["doctorOpinion"]["summary"]) > 0
+
+
+def test_post_analyze_returns_new_schema():
+    response = client.post("/analyze", json={
+        "question": "메트포르민과 비타민C를 같이 먹어도 될까요?",
+        "context": "당뇨 환자, 메트포르민 복용 중"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert "level" in data
+    assert data["level"] in ["safe", "caution", "danger"]
+    assert "doctorOpinion" in data
+    assert "pharmacistOpinion" in data
+    assert "alternatives" in data
+    assert isinstance(data["doctorOpinion"], dict)
+    assert isinstance(data["pharmacistOpinion"], dict)
+    assert "summary" in data["doctorOpinion"]
+    assert "detail" in data["doctorOpinion"]
+    assert "summary" in data["pharmacistOpinion"]
+    assert "detail" in data["pharmacistOpinion"]
+    assert isinstance(data["alternatives"], list)

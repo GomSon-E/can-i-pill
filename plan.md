@@ -249,7 +249,7 @@
   - 모델: `gemini-3.1-flash-lite`
 
 #### 6-4. 약물-영양제-음식 상호작용 AI Agent 실제 연동
-- [ ] `POST /analyze` body `{ question, context }` 전송 시 Gemini 호출, 새 스키마로 응답 반환
+- [x] `POST /analyze` body `{ question, context }` 전송 시 Gemini 호출, 새 스키마로 응답 반환
   - 응답 스키마:
     ```json
     {
@@ -262,7 +262,7 @@
   - 모델: `gemini-3.1-flash-lite`
   - JSON 구조화 실패 시 재시도 (최대 2회)
 - [ ] `level` 값이 항상 `safe | caution | danger` 중 하나임을 단언
-- [ ] 기존 테스트의 `"warning"` → `"caution"` 수정 (test_mock_ai.py 버그 수정)
+- [x] 기존 테스트의 `"warning"` → `"caution"` 수정 (test_mock_ai.py 버그 수정)
 
 ---
 
