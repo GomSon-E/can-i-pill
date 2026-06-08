@@ -44,16 +44,51 @@ _OCR_MOCKS = itertools.cycle([
     {
         "name": "내과 처방전 2026-05",
         "drugs": [
-            {"name": "메트포르민", "purpose": "지병 약"},
-            {"name": "아스피린", "purpose": "보조 약물"},
+            {
+                "name": "메트포르민",
+                "dosage": "500mg",
+                "frequency": "1일 2회",
+                "days": 30,
+                "usage": "식후",
+                "cautions": "저혈당 주의"
+            },
+            {
+                "name": "아스피린",
+                "dosage": "100mg",
+                "frequency": "1일 1회",
+                "days": 30,
+                "usage": "식후",
+                "cautions": "위장장애 가능"
+            },
         ],
     },
     {
         "name": "정형외과 처방전 2026-05",
         "drugs": [
-            {"name": "세레콕시브", "purpose": "지병 약"},
-            {"name": "에소메프라졸", "purpose": "보조 약물"},
-            {"name": "트라마돌", "purpose": "보조 약물"},
+            {
+                "name": "세레콕시브",
+                "dosage": "200mg",
+                "frequency": "1일 2회",
+                "days": 14,
+                "usage": "식후",
+                "cautions": "위궤양 가능성"
+            },
+            {
+                "name": "에소메프라졸",
+                "dosage": "20mg",
+                "frequency": "1일 1회",
+                "days": 14,
+                "usage": "아침 공복",
+                "cautions": "장기복용 제한"
+            },
+            {
+                "name": "트라마돌",
+                "dosage": "50mg",
+                "frequency": "필요시 4-6시간마다",
+                "days": 7,
+                "usage": "식후",
+                "cautions": "졸음, 의존성 주의"
+            },
         ],
     },
 ])
