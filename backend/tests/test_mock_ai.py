@@ -44,8 +44,14 @@ def test_post_ocr_returns_new_schema():
     assert "cautions" in drug
 
 
-def test_post_label_returns_mock_supplement():
+def test_post_label_without_image_returns_422():
     response = client.post("/label")
+    assert response.status_code == 422
+
+
+def test_post_label_returns_mock_supplement():
+    with open("backend/tests/dummy_image.png", "rb") as f:
+        response = client.post("/label", files={"image": f})
     assert response.status_code == 200
     data = response.json()
     assert "name" in data

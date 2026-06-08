@@ -100,7 +100,7 @@ def ocr(image: UploadFile = File(...)):
 
 
 @router.post("/label")
-def label():
+def label(image: UploadFile = File(...)):
     return next(_LABEL_MOCKS)
 
 

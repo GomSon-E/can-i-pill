@@ -242,7 +242,7 @@
   - 환경변수 `GEMINI_API_KEY` 사용
 
 #### 6-3. 영양제 라벨 VLM 실제 연동
-- [ ] `POST /label`에 이미지(multipart) 없이 호출 시 422 반환
+- [x] `POST /label`에 이미지(multipart) 없이 호출 시 422 반환
 - [ ] `POST /label`에 영양제 라벨 이미지 전송 시 Gemini 호출, 제품명/영양 성분 반환
   - 응답 스키마: `{ name, nutrients: [{ ingredient, amount, unit }] }`
   - 절대 함량만 추출 (비율 % 제외), 천 단위 쉼표 제거
