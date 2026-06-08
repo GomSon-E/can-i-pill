@@ -120,3 +120,14 @@ def test_post_analyze_returns_new_schema():
     assert "summary" in data["pharmacistOpinion"]
     assert "detail" in data["pharmacistOpinion"]
     assert isinstance(data["alternatives"], list)
+
+
+def test_post_analyze_level_values_are_valid():
+    for _ in range(3):
+        response = client.post("/analyze", json={
+            "question": "테스트 질문",
+            "context": "테스트 컨텍스트"
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["level"] in ["safe", "caution", "danger"]

@@ -261,7 +261,7 @@
     ```
   - 모델: `gemini-3.1-flash-lite`
   - JSON 구조화 실패 시 재시도 (최대 2회)
-- [ ] `level` 값이 항상 `safe | caution | danger` 중 하나임을 단언
+- [x] `level` 값이 항상 `safe | caution | danger` 중 하나임을 단언
 - [x] 기존 테스트의 `"warning"` → `"caution"` 수정 (test_mock_ai.py 버그 수정)
 
 ---
