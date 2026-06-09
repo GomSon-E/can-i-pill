@@ -17,7 +17,7 @@ export default function Ob04() {
   useEffect(() => {
     if (ocrStore.result) {
       setPrescriptionName(ocrStore.result.name)
-      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, id: i })))
+      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, purpose: d.purpose ?? '보조 약물', id: i })))
     }
   }, [])
 

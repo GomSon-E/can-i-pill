@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ocrStore } from '../../store/ocrStore'
 import StatusBar from '../../components/StatusBar'
@@ -10,9 +11,15 @@ const PRESCRIPTIONS = [
 
 export default function Ob03() {
   const navigate = useNavigate()
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleTakePhoto() {
-    const res = await fetch('/ocr', { method: 'POST' })
+  async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const formData = new FormData()
+    formData.append('image', file)
+    const res = await fetch('/ocr', { method: 'POST', body: formData })
     const data = await res.json()
     ocrStore.result = data
     navigate('/ob-04')
@@ -134,10 +141,13 @@ export default function Ob03() {
         </div>
       </div>
 
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} style={{ display: 'none' }} />
+      <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+
       {/* 하단 버튼 */}
       <div style={{ padding: '12px 22px 22px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
         <button
-          onClick={handleTakePhoto}
+          onClick={() => cameraInputRef.current?.click()}
           style={{
             width: '100%',
             height: 56,
@@ -163,7 +173,7 @@ export default function Ob03() {
           처방전 사진 찍기
         </button>
         <button
-          onClick={handleTakePhoto}
+          onClick={() => galleryInputRef.current?.click()}
           style={{
             width: '100%',
             height: 52,
