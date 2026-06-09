@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import Ob05 from '../pages/ob/Ob05'
@@ -20,6 +20,10 @@ function renderOb05() {
   )
 }
 
+function getFileInput() {
+  return document.querySelector('input[type="file"]') as HTMLInputElement
+}
+
 describe('S-09: OB-05 영양제 등록', () => {
   beforeEach(() => {
     mockNavigate.mockClear()
@@ -31,7 +35,7 @@ describe('S-09: OB-05 영양제 등록', () => {
     expect(screen.getByTestId('page-ob-05')).toBeInTheDocument()
   })
 
-  it('"영양제 라벨 사진 찍기" 탭 시 POST /label [MOCK] 호출', async () => {
+  it('"영양제 라벨 사진 찍기" 파일 선택 시 POST /label 호출', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -40,12 +44,16 @@ describe('S-09: OB-05 영양제 등록', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderOb05()
-    await userEvent.click(screen.getByRole('button', { name: '영양제 라벨 사진 찍기' }))
+    const fileInput = getFileInput()
+    const file = new File(['img'], 'label.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/label'),
-      expect.objectContaining({ method: 'POST' })
-    )
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/label'),
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
   })
 
   it('Mock 결과로 영양제 카드 추가', async () => {
@@ -56,9 +64,13 @@ describe('S-09: OB-05 영양제 등록', () => {
     }))
 
     renderOb05()
-    await userEvent.click(screen.getByRole('button', { name: '영양제 라벨 사진 찍기' }))
+    const fileInput = getFileInput()
+    const file = new File(['img'], 'label.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
-    expect(screen.getByText('비타민C')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('비타민C')).toBeInTheDocument()
+    })
   })
 
   it('현재 N개 등록됨 카운터 업데이트', async () => {
@@ -72,9 +84,13 @@ describe('S-09: OB-05 영양제 등록', () => {
     const counter = screen.getByTestId('supplement-counter')
     expect(counter.textContent).toMatch(/현재.*0개 등록됨/)
 
-    await userEvent.click(screen.getByRole('button', { name: '영양제 라벨 사진 찍기' }))
+    const fileInput = getFileInput()
+    const file = new File(['img'], 'label.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
-    expect(counter.textContent).toMatch(/현재.*1개 등록됨/)
+    await waitFor(() => {
+      expect(counter.textContent).toMatch(/현재.*1개 등록됨/)
+    })
   })
 
   it('영양제 카드 개별 삭제 가능', async () => {
@@ -85,8 +101,13 @@ describe('S-09: OB-05 영양제 등록', () => {
     }))
 
     renderOb05()
-    await userEvent.click(screen.getByRole('button', { name: '영양제 라벨 사진 찍기' }))
-    expect(screen.getByText('비타민C')).toBeInTheDocument()
+    const fileInput = getFileInput()
+    const file = new File(['img'], 'label.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
+
+    await waitFor(() => {
+      expect(screen.getByText('비타민C')).toBeInTheDocument()
+    })
 
     await userEvent.click(screen.getByRole('button', { name: '비타민C 삭제' }))
     expect(screen.queryByText('비타민C')).not.toBeInTheDocument()

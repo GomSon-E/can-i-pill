@@ -14,19 +14,23 @@ export default function Ob05() {
   const navigate = useNavigate()
   const [supplements, setSupplements] = useState<Supplement[]>([])
 
-  const handleScanLabel = async () => {
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
     try {
-      const res = await fetch('/label', { method: 'POST' })
+      const formData = new FormData()
+      formData.append('image', file)
+      const res = await fetch('/label', { method: 'POST', body: formData })
+      if (!res.ok) return
       const data = await res.json()
+      if (!data.name) return
       setSupplements((prev) => [
         ...prev,
-        { id: nextId++, name: data.name, ingredients: data.ingredients },
+        { id: nextId++, name: data.name, ingredients: data.ingredients ?? [] },
       ])
     } catch {
-      setSupplements((prev) => [
-        ...prev,
-        { id: nextId++, name: '비타민C 1000mg', ingredients: ['아스코르브산 1000mg', '히아루론산'] },
-      ])
+      // 네트워크 오류 시 무시
     }
   }
 
@@ -104,9 +108,8 @@ export default function Ob05() {
         </p>
 
         {/* 사진 찍기 카드 */}
-        <button
+        <label
           aria-label="영양제 라벨 사진 찍기"
-          onClick={handleScanLabel}
           style={{
             width: '100%',
             backgroundColor: '#F8F8FA',
@@ -119,8 +122,16 @@ export default function Ob05() {
             gap: 14,
             marginBottom: 14,
             fontFamily: 'inherit',
+            boxSizing: 'border-box',
           }}
         >
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            style={{ display: 'none' }}
+            data-testid="camera-input"
+          />
           <div style={{
             width: 44,
             height: 44,
@@ -143,7 +154,7 @@ export default function Ob05() {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ marginLeft: 'auto', flexShrink: 0 }}>
             <path d="M8 5l5 5-5 5" stroke="#C4C5CC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </button>
+        </label>
 
         {/* 검색 입력 */}
         <div style={{
@@ -188,7 +199,9 @@ export default function Ob05() {
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1A1B22' }}>{s.name}</div>
-                  <div style={{ fontSize: 12, color: '#8B8C96' }}>{s.ingredients.join(', ')}</div>
+                  {s.ingredients.length > 0 && (
+                    <div style={{ fontSize: 12, color: '#8B8C96' }}>{s.ingredients.join(', ')}</div>
+                  )}
                 </div>
                 <button
                   aria-label={`${s.name} 삭제`}

@@ -16,6 +16,7 @@ export default function Ob03() {
 
   async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
     const formData = new FormData()
     formData.append('image', file)
@@ -141,13 +142,9 @@ export default function Ob03() {
         </div>
       </div>
 
-      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} style={{ display: 'none' }} />
-      <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
-
       {/* 하단 버튼 */}
       <div style={{ padding: '12px 22px 22px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button
-          onClick={() => cameraInputRef.current?.click()}
+        <label
           style={{
             width: '100%',
             height: 56,
@@ -164,16 +161,17 @@ export default function Ob03() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
+            boxSizing: 'border-box',
           }}
         >
+          <input ref={cameraInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
             <path d="M10 13a3 3 0 100-6 3 3 0 000 6z" stroke="#fff" strokeWidth="1.5" />
             <circle cx="10" cy="10" r="8" stroke="#fff" strokeWidth="1.5" />
           </svg>
           처방전 사진 찍기
-        </button>
-        <button
-          onClick={() => galleryInputRef.current?.click()}
+        </label>
+        <label
           style={{
             width: '100%',
             height: 52,
@@ -189,15 +187,17 @@ export default function Ob03() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: 8,
+            boxSizing: 'border-box',
           }}
         >
+          <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
             <rect x="2" y="3" width="14" height="12" rx="2" stroke="#B1174B" strokeWidth="1.5" />
             <circle cx="9" cy="9" r="3" stroke="#B1174B" strokeWidth="1.5" />
             <path d="M6 3V2M12 3V2" stroke="#B1174B" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
           갤러리에서 선택하기
-        </button>
+        </label>
         <button
           onClick={handleSkip}
           style={{

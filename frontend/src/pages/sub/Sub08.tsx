@@ -13,31 +13,42 @@ let nextId = 1
 export default function Sub08() {
   const navigate = useNavigate()
   const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const [supplements, setSupplements] = useState<Supplement[]>([])
   const [textInput, setTextInput] = useState('')
+  const [errorToast, setErrorToast] = useState<string | null>(null)
 
-  const handleCapture = () => {
-    cameraInputRef.current?.click()
+  const showError = (msg: string) => {
+    setErrorToast(msg)
+    setTimeout(() => setErrorToast(null), 3000)
   }
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
+    event.target.value = ''
     if (!file) return
 
     try {
       const formData = new FormData()
       formData.append('image', file)
       const res = await fetch('/label', { method: 'POST', body: formData })
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}))
+        console.error('label 422:', res.status, errBody)
+        showError(`이미지 분석 실패 (${res.status}) — 다시 시도해주세요`)
+        return
+      }
       const data = await res.json()
+      if (!data.name) {
+        showError('영양제 정보를 읽지 못했어요. 라벨이 잘 보이는지 확인해주세요')
+        return
+      }
       const ingredients = data.nutrients?.map((n: any) => `${n.ingredient} ${n.amount}${n.unit}`) ?? []
       setSupplements(prev => [...prev, { id: nextId++, name: data.name, ingredients }])
-    } catch {
-      setSupplements(prev => [...prev, { id: nextId++, name: '비타민C 1000mg', ingredients: ['아스코르브산 1000mg'] }])
+    } catch (e) {
+      console.error('label fetch error:', e)
+      showError('네트워크 오류가 발생했어요. 백엔드 서버가 실행 중인지 확인해주세요')
     }
-  }
-
-  const handleScanLabel = () => {
-    cameraInputRef.current?.click()
   }
 
   const handleTextAdd = () => {
@@ -73,15 +84,6 @@ export default function Sub08() {
         fontFamily: "'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       }}
     >
-      <input
-        ref={cameraInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        onChange={handleFileSelect}
-        style={{ display: 'none' }}
-        data-testid="camera-input"
-      />
       <StatusBar />
 
       {/* 앱 헤더 */}
@@ -101,15 +103,16 @@ export default function Sub08() {
       <div style={{ flex: 1, paddingLeft: 22, paddingRight: 22, paddingTop: 20, overflowY: 'auto' }}>
 
         {/* 라벨 사진 찍기 */}
-        <button
+        <label
           aria-label="영양제 라벨 사진 찍기"
-          onClick={handleScanLabel}
           style={{
             width: '100%', backgroundColor: '#F8F8FA', border: '1.5px dashed #C4C5CC',
             borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, fontFamily: 'inherit',
+            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8, fontFamily: 'inherit',
+            boxSizing: 'border-box',
           }}
         >
+          <input ref={cameraInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} data-testid="camera-input" />
           <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#E91E63', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
               <path d="M11 7v8M7 11h8" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
@@ -123,7 +126,33 @@ export default function Sub08() {
           <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ marginLeft: 'auto', flexShrink: 0 }}>
             <path d="M8 5l5 5-5 5" stroke="#C4C5CC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-        </button>
+        </label>
+
+        {/* 갤러리에서 선택 */}
+        <label
+          aria-label="갤러리에서 선택"
+          style={{
+            width: '100%', backgroundColor: '#F8F8FA', border: '1.5px dashed #C4C5CC',
+            borderRadius: 14, padding: '16px 18px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, fontFamily: 'inherit',
+            boxSizing: 'border-box',
+          }}
+        >
+          <input ref={galleryInputRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} data-testid="gallery-input" />
+          <div style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#F0F0F3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="3" y="4" width="16" height="14" rx="2" stroke="#54555C" strokeWidth="1.5" />
+              <circle cx="11" cy="11" r="3.5" stroke="#54555C" strokeWidth="1.5" />
+            </svg>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1B22', marginBottom: 2 }}>갤러리에서 선택</div>
+            <div style={{ fontSize: 12, color: '#8B8C96' }}>저장된 사진을 불러오세요</div>
+          </div>
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            <path d="M8 5l5 5-5 5" stroke="#C4C5CC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </label>
 
         {/* 직접 입력 */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
@@ -199,6 +228,17 @@ export default function Sub08() {
           취소
         </button>
       </div>
+
+      {errorToast && (
+        <div style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          backgroundColor: '#C62828', color: '#fff', padding: '12px 20px',
+          borderRadius: 12, fontSize: 14, fontWeight: 600, zIndex: 1000,
+          whiteSpace: 'nowrap', maxWidth: '90vw', textAlign: 'center',
+        }}>
+          {errorToast}
+        </div>
+      )}
     </div>
   )
 }
