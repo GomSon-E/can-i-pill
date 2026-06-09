@@ -75,18 +75,6 @@ export default function Main02() {
     navigate('/main-04')
   }
 
-  async function handleLabelPhoto() {
-    try {
-      const res = await fetch('/label', { method: 'POST' })
-      const data = await res.json()
-      const ingredients: string[] = data.ingredients ?? []
-      analyzeStore.question = ingredients.join(', ')
-    } catch {
-      analyzeStore.question = '아스코르브산 1000mg, 히아루론산'
-    }
-    navigate('/main-04')
-  }
-
   return (
     <div
       data-testid="page-main-02"
@@ -196,54 +184,6 @@ export default function Main02() {
               lineHeight: 1.6,
             }}
           />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={handleLabelPhoto}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 10,
-                border: '1.5px solid #E4E5E9',
-                backgroundColor: '#fff',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <rect x="7" y="2" width="4" height="8" rx="2" stroke="#54555C" strokeWidth="1.5" />
-                <path d="M3 9a6 6 0 0012 0" stroke="#54555C" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M9 15v2M6 17h6" stroke="#54555C" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button
-              onClick={handleLabelPhoto}
-              style={{
-                flex: 1,
-                height: 44,
-                padding: '0 14px',
-                borderRadius: 10,
-                border: '1.5px solid #E4E5E9',
-                backgroundColor: '#fff',
-                color: '#E91E63',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                fontSize: 14,
-                fontWeight: 600,
-                fontFamily: 'inherit',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M8 11a3 3 0 100-6 3 3 0 000 6z" stroke="#E91E63" strokeWidth="1.5" />
-                <circle cx="8" cy="8" r="6.5" stroke="#E91E63" strokeWidth="1.5" />
-              </svg>
-              영양제·라벨 사진
-            </button>
-          </div>
         </div>
 
         {/* 약 정보 안내 */}

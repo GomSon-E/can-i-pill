@@ -149,14 +149,14 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/main-04')
   })
 
-  it('"영양제·라벨 사진" 탭 시 MAIN-03으로 이동', async () => {
+  it('물어보기 화면에서 라벨 사진 버튼을 표시하지 않음', async () => {
     renderPage('/main-02')
-    await userEvent.click(screen.getByRole('button', { name: /영양제·라벨 사진/ }))
-    expect(mockNavigate).toHaveBeenCalledWith('/main-03')
+    expect(screen.queryByRole('button', { name: /영양제·라벨 사진/ })).not.toBeInTheDocument()
   })
 
   it('MAIN-04 진입 시 data-testid="page-main-04" 렌더', async () => {
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
@@ -166,6 +166,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
 
   it('MAIN-04 진입 시 POST /analyze 호출', async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
@@ -176,18 +177,33 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
   })
 
   it('MAIN-04 진입 시 POST /history 호출', async () => {
+    const analyzeResponse = {
+      level: 'safe',
+      doctorOpinion: { summary: '안전합니다', detail: '안전합니다' },
+      pharmacistOpinion: { summary: '복용 가능합니다', detail: '복용 가능합니다' },
+      alternatives: [],
+    }
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => analyzeResponse })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
     renderPage('/main-04')
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/history'), expect.objectContaining({ method: 'POST' }))
     })
+    const historyCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/history'))
+    expect(JSON.parse(historyCall?.[1]?.body as string)).toMatchObject({
+      level: 'safe',
+      doctorOpinion: analyzeResponse.doctorOpinion,
+      pharmacistOpinion: analyzeResponse.pharmacistOpinion,
+      alternatives: [],
+    })
   })
 
   it('MAIN-04 분석 완료 후 MAIN-05로 이동', async () => {
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
@@ -270,6 +286,7 @@ describe('S-16: 분석 결과 — 안전', () => {
   it('level: safe 시 "드셔도 괜찮아요" 표시', async () => {
     // set result in store via Main04 navigate flow
     vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
