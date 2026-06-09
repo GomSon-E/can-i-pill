@@ -61,8 +61,11 @@ async def ocr(image: UploadFile = File(...)):
 
 
 _LABEL_PROMPT = (
-    "이 이미지에서 제품명과 영양성분·함량(절대량)만 추출하세요.\n"
+    "이 이미지에서 화면 표시용 영양제명과 영양성분·함량(절대량)만 추출하세요.\n"
     "규칙:\n"
+    "- name은 화면에 표시할 대표명입니다. 제품명이 보이면 제품명을 그대로 사용\n"
+    "- 제품명이 보이지 않거나 일부만 읽히면 대표 성분명으로 '비타민C 영양제', '마그네슘 영양제'처럼 생성\n"
+    "- name은 가능하면 비우지 말고, 브랜드·제조사명이 아니라 사용자가 식별할 수 있는 영양제명/대표명으로 작성\n"
     "- 절대 함량(mg, μg, g, IU 등 실제 양)만 포함\n"
     "- 비율(%)은 모두 제외 (1일 영양성분기준치 %, 함량 옆에 괄호로 적힌 % 등)\n"
     "- 숫자 사이 천 단위 쉼표는 제거 (예: '1,000' → '1000', '4,917' → '4917')\n"
@@ -72,7 +75,7 @@ _LABEL_PROMPT = (
     "\n"
     "반드시 아래 JSON 형식으로만 응답하세요:\n"
     '{\n'
-    '  "name": "제품명",\n'
+    '  "name": "화면 표시용 영양제명 또는 대표명",\n'
     '  "nutrients": [\n'
     '    {\n'
     '      "ingredient": "성분명",\n'
@@ -82,6 +85,69 @@ _LABEL_PROMPT = (
     '  ]\n'
     '}'
 )
+
+_LABEL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "nutrients": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "ingredient": {"type": "string"},
+                    "amount": {"type": "string"},
+                    "unit": {"type": "string"},
+                },
+                "required": ["ingredient", "amount", "unit"],
+            },
+        },
+        "ingredients": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["name", "nutrients"],
+}
+
+
+def _format_nutrient(nutrient: dict) -> str:
+    ingredient = str(nutrient.get("ingredient", "")).strip()
+    amount = str(nutrient.get("amount", "")).strip()
+    unit = str(nutrient.get("unit", "")).strip()
+    if ingredient and amount and unit:
+        return f"{ingredient} {amount}{unit}"
+    if ingredient:
+        return ingredient
+    return ""
+
+
+def _build_label_display_name(data: dict) -> str:
+    name = str(data.get("name", "")).strip()
+    if name:
+        return name
+
+    nutrients = data.get("nutrients") or []
+    ingredient_names = [
+        str(nutrient.get("ingredient", "")).strip()
+        for nutrient in nutrients
+        if isinstance(nutrient, dict) and str(nutrient.get("ingredient", "")).strip()
+    ]
+    if len(ingredient_names) >= 2:
+        return f"{ingredient_names[0]} 외 {len(ingredient_names) - 1}종 영양제"
+    if len(ingredient_names) == 1:
+        return f"{ingredient_names[0]} 영양제"
+    return "알 수 없는 영양제"
+
+
+def _normalize_label_result(data: dict) -> dict:
+    data["name"] = _build_label_display_name(data)
+    data["nutrients"] = data.get("nutrients") or []
+    data["ingredients"] = [
+        formatted
+        for nutrient in data["nutrients"]
+        if isinstance(nutrient, dict)
+        for formatted in [_format_nutrient(nutrient)]
+        if formatted
+    ]
+    return data
 
 
 @router.post("/label")
@@ -94,9 +160,12 @@ async def label(image: UploadFile = File(...)):
             types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
             prompt,
         ],
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=_LABEL_SCHEMA,
+        ),
     )
-    return json.loads(response.text)
+    return _normalize_label_result(json.loads(response.text))
 
 
 _ANALYSIS_SCHEMA = {
