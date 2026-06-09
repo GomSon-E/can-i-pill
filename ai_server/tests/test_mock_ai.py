@@ -10,7 +10,7 @@ def test_post_ocr_without_image_returns_422():
 
 
 def test_post_ocr_returns_mock_prescription():
-    with open("backend/tests/dummy_image.png", "rb") as f:
+    with open("tests/dummy_image.png", "rb") as f:
         response = client.post("/ocr", files={"image": f})
     assert response.status_code == 200
     data = response.json()
@@ -28,7 +28,7 @@ def test_post_ocr_returns_mock_prescription():
 
 
 def test_post_ocr_returns_new_schema():
-    with open("backend/tests/dummy_image.png", "rb") as f:
+    with open("tests/dummy_image.png", "rb") as f:
         response = client.post("/ocr", files={"image": f})
     assert response.status_code == 200
     data = response.json()
@@ -50,7 +50,7 @@ def test_post_label_without_image_returns_422():
 
 
 def test_post_label_returns_mock_supplement():
-    with open("backend/tests/dummy_image.png", "rb") as f:
+    with open("tests/dummy_image.png", "rb") as f:
         response = client.post("/label", files={"image": f})
     assert response.status_code == 200
     data = response.json()
@@ -61,7 +61,7 @@ def test_post_label_returns_mock_supplement():
 
 
 def test_post_label_returns_new_schema():
-    with open("backend/tests/dummy_image.png", "rb") as f:
+    with open("tests/dummy_image.png", "rb") as f:
         response = client.post("/label", files={"image": f})
     assert response.status_code == 200
     data = response.json()

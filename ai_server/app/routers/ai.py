@@ -4,7 +4,18 @@ from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
-from app.db import _load_env
+
+
+def _load_env():
+    env_path = os.path.join(os.path.dirname(__file__), "../../../.env")
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, _, value = line.partition("=")
+                    os.environ.setdefault(key.strip(), value.strip())
+
 
 _load_env()
 
@@ -48,12 +59,11 @@ _OCR_PROMPT = (
 @router.post("/ocr")
 async def ocr(image: UploadFile = File(...)):
     image_bytes = await image.read()
-    prompt = _OCR_PROMPT
     response = _client.models.generate_content(
         model=MODEL,
         contents=[
             types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-            prompt,
+            _OCR_PROMPT,
         ],
         config=types.GenerateContentConfig(response_mime_type="application/json"),
     )
@@ -153,12 +163,11 @@ def _normalize_label_result(data: dict) -> dict:
 @router.post("/label")
 async def label(image: UploadFile = File(...)):
     image_bytes = await image.read()
-    prompt = _LABEL_PROMPT
     response = _client.models.generate_content(
         model=MODEL,
         contents=[
             types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-            prompt,
+            _LABEL_PROMPT,
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
