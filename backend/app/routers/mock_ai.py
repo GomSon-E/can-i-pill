@@ -1,7 +1,6 @@
 import itertools
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
-from typing import List, Optional
 
 router = APIRouter()
 
@@ -62,12 +61,6 @@ _LABEL_MOCKS = itertools.cycle([
     },
 ])
 
-
-class AnalyzeRequest(BaseModel):
-    question: str
-    context: str = ''
-
-
 _OCR_MOCKS = itertools.cycle([
     {
         "name": "내과 처방전 2026-05",
@@ -120,6 +113,11 @@ _OCR_MOCKS = itertools.cycle([
         ],
     },
 ])
+
+
+class AnalyzeRequest(BaseModel):
+    question: str
+    context: str = ''
 
 
 @router.post("/ocr")
