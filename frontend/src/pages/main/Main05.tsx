@@ -50,6 +50,14 @@ export default function Main05() {
     )
   }
 
+  if (!result.doctorOpinion || !result.pharmacistOpinion) {
+    return (
+      <div data-testid="page-main-05" style={{ padding: 22 }}>
+        분석 결과 형식이 올바르지 않습니다.
+      </div>
+    )
+  }
+
   const { level, doctorOpinion, pharmacistOpinion, alternatives } = result
   const banner = getBannerConfig(level)
   const showAlternatives = level === 'caution' || level === 'danger'

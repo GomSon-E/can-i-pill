@@ -7,10 +7,17 @@ from datetime import date
 router = APIRouter()
 
 
+class Opinion(BaseModel):
+    summary: str
+    detail: str
+
+
 class HistoryCreate(BaseModel):
     level: str
     question: str
-    summary: str
+    doctorOpinion: Opinion
+    pharmacistOpinion: Opinion
+    alternatives: list[str] = []
 
 
 @router.get("/history")
@@ -32,7 +39,9 @@ def create_history(body: HistoryCreate):
         "id": str(uuid.uuid4()),
         "level": body.level,
         "question": body.question,
-        "summary": body.summary,
+        "doctorOpinion": body.doctorOpinion.model_dump(),
+        "pharmacistOpinion": body.pharmacistOpinion.model_dump(),
+        "alternatives": body.alternatives,
         "created_at": str(date.today()),
     }
     store_module.store["history"].append(item)

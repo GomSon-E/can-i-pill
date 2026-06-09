@@ -71,7 +71,8 @@ export default function Sub04() {
     analyzeStore.question = data.question
     analyzeStore.result = {
       level: data.level,
-      summary: data.summary,
+      doctorOpinion: data.doctorOpinion,
+      pharmacistOpinion: data.pharmacistOpinion,
       alternatives: data.alternatives ?? [],
     }
     navigate('/main-05')
@@ -103,7 +104,7 @@ export default function Sub04() {
 
       <div style={{ flex: 1, overflowY: 'auto', paddingLeft: 22, paddingRight: 22, paddingTop: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map((item, i) => {
+          {filtered.map((item) => {
             const colors = LEVEL_COLORS[item.level] || LEVEL_COLORS['safe']
             return (
               <div

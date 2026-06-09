@@ -44,13 +44,19 @@ export default function Main04() {
         })
         if (!res.ok) throw new Error(`analyze failed: ${res.status}`)
         const data = await res.json()
-        analyzeStore.result = { level: data.level, summary: data.summary, alternatives: data.alternatives ?? [] }
+        const result = {
+          level: data.level,
+          doctorOpinion: data.doctorOpinion,
+          pharmacistOpinion: data.pharmacistOpinion,
+          alternatives: data.alternatives ?? [],
+        }
+        analyzeStore.result = result
 
         // Save to history
         await fetch('/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question: analyzeStore.question, level: data.level, summary: data.summary }),
+          body: JSON.stringify({ question: analyzeStore.question, ...result }),
         }).catch(() => {})
 
         if (timerRef.current) clearInterval(timerRef.current)
