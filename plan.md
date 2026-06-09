@@ -1,8 +1,5 @@
 # 이거뭐약 — Plan
 
-> TDD 체크리스트. "go"라고 하면 다음 미완성 항목부터 시작.
-> 각 항목 = 테스트 1개 작성 → 구현 → 통과 → 체크
-
 ---
 
 ## Phase 1. 프로젝트 기반 세팅
@@ -293,3 +290,41 @@
 #### 8-2. Main05 화면 업데이트
 - [x] `doctorOpinion.summary` / `pharmacistOpinion.summary` 표시
 - [x] "자세히 보기" 토글 시 `doctorOpinion.detail` / `pharmacistOpinion.detail` 표시
+
+---
+
+## 배포를 위해 AI가 해야하는 것
+
+> 서버 아키텍처 설계 문서 기준: 프론트엔드(AWS Lightsail $5) + 백엔드 GCP($13) + AI 서버 GCP($13), 총 $31/월.
+> 백엔드는 CRUD 전용, AI 서버는 OCR/라벨/분석 전용으로 별도 인스턴스 배포.
+
+### D-1. AI 서버 코드 분리
+
+- [x] 루트에 `ai_server/` 디렉토리 생성
+- [x] `ai_server/app/main.py` 생성 — 독립 FastAPI 앱, `/health` 엔드포인트 포함
+- [x] `ai_server/app/routers/ai.py` 생성 — `backend/app/routers/ai.py`의 OCR·라벨·분석 라우터 이동
+- [x] `ai_server/requirements.txt` 생성 — `google-genai`, `fastapi`, `uvicorn` 등 AI 서버 의존성만
+- [x] `backend/app/routers/ai.py` 제거 — AI 라우터를 백엔드에서 삭제
+- [x] `backend/app/main.py` 에서 AI 라우터 등록 제거
+- [x] 백엔드에 `httpx` 추가 — `/ocr`, `/label`, `/analyze` 요청을 AI 서버로 포워딩하는 프록시 라우터 작성
+  - 백엔드가 요청을 받아 `http://ai-server:8001`로 전달, 응답을 그대로 반환
+  - 프론트엔드·Vite proxy 설정 변경 없이 투명하게 동작
+- [x] `backend/tests/`에서 AI 관련 테스트를 `ai_server/tests/`로 이동
+- [x] 로컬 테스트: 백엔드 8000, AI 서버 8001로 동시 실행 후 `/analyze` 정상 응답 확인
+
+### D-2. 도커화
+
+- [x] `frontend/Dockerfile` 작성 — `npm run build` → nginx로 정적 파일 서빙
+- [x] `frontend/nginx.conf` 작성 — SPA 라우팅(`try_files $uri /index.html`), gzip 압축
+- [x] `backend/Dockerfile` 작성 — `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 3`
+- [x] `ai_server/Dockerfile` 작성 — `uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 1`
+- [x] 루트에 `docker-compose.yml` 작성 — 로컬 개발용 (backend:8000, ai_server:8001, frontend:80)
+  - `backend`가 `ai_server` 서비스명으로 접근할 수 있도록 네트워크 구성
+  - `.env` 파일로 환경변수 주입
+- [x] `.dockerignore` 작성 (frontend, backend, ai_server 각각)
+- [x] `docker-compose up` 후 `/analyze` end-to-end 정상 동작 확인
+
+
+
+
+
