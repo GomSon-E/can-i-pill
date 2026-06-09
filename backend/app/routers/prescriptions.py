@@ -9,7 +9,6 @@ router = APIRouter()
 
 class Drug(BaseModel):
     name: str
-    purpose: str
 
 
 class PrescriptionCreate(BaseModel):
@@ -27,7 +26,7 @@ def create_prescription(body: PrescriptionCreate):
     prescription = {
         "id": str(uuid.uuid4()),
         "name": body.name,
-        "drugs": [{"name": d.name, "purpose": d.purpose} for d in body.drugs],
+        "drugs": [{"name": d.name} for d in body.drugs],
     }
     store_module.store["prescriptions"].append(prescription)
     return prescription
@@ -41,7 +40,7 @@ def update_prescription(prescription_id: str, body: PrescriptionCreate):
             updated = {
                 "id": prescription_id,
                 "name": body.name,
-                "drugs": [{"name": d.name, "purpose": d.purpose} for d in body.drugs],
+                "drugs": [{"name": d.name} for d in body.drugs],
             }
             prescriptions[i] = updated
             return updated

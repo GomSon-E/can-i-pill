@@ -17,13 +17,9 @@ export default function Ob04() {
   useEffect(() => {
     if (ocrStore.result) {
       setPrescriptionName(ocrStore.result.name)
-      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, purpose: d.purpose ?? '보조 약물', id: i })))
+      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, id: i })))
     }
   }, [])
-
-  function handleChangePurpose(id: number, purpose: '지병 약' | '보조 약물') {
-    setDrugs(prev => prev.map(d => d.id === id ? { ...d, purpose } : d))
-  }
 
   function handleDelete(id: number) {
     setDrugs(prev => prev.filter(d => d.id !== id))
@@ -41,9 +37,6 @@ export default function Ob04() {
     navigate('/ob-05')
   }
 
-  const diseaseDrugs = drugs.filter(d => d.purpose === '지병 약')
-  const otherDrugs = drugs.filter(d => d.purpose === '보조 약물')
-
   function DrugCard({ drug }: { drug: DrugItem }) {
     return (
       <div style={{
@@ -56,56 +49,22 @@ export default function Ob04() {
         marginBottom: 6,
       }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#1A1B22', flex: 1 }}>{drug.name}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <button
-            onClick={() => handleChangePurpose(drug.id, '지병 약')}
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              padding: '3px 8px',
-              border: drug.purpose === '지병 약' ? '1.5px solid #E91E63' : '1.5px solid #ddd',
-              borderRadius: 20,
-              background: drug.purpose === '지병 약' ? '#E91E63' : '#fff',
-              color: drug.purpose === '지병 약' ? '#fff' : '#8B8C96',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            지병 약
-          </button>
-          <button
-            onClick={() => handleChangePurpose(drug.id, '보조 약물')}
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              padding: '3px 8px',
-              border: drug.purpose === '보조 약물' ? '1.5px solid #E91E63' : '1.5px solid #ddd',
-              borderRadius: 20,
-              background: drug.purpose === '보조 약물' ? '#E91E63' : '#fff',
-              color: drug.purpose === '보조 약물' ? '#fff' : '#8B8C96',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-            }}
-          >
-            보조 약물
-          </button>
-          <button
-            aria-label="삭제"
-            onClick={() => handleDelete(drug.id)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: '#8B8C96',
-              fontSize: 16,
-              padding: '0 4px',
-              lineHeight: 1,
-              fontFamily: 'inherit',
-            }}
-          >
-            ×
-          </button>
-        </div>
+        <button
+          aria-label="삭제"
+          onClick={() => handleDelete(drug.id)}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            color: '#8B8C96',
+            fontSize: 16,
+            padding: '0 4px',
+            lineHeight: 1,
+            fontFamily: 'inherit',
+          }}
+        >
+          ×
+        </button>
       </div>
     )
   }
@@ -207,27 +166,7 @@ export default function Ob04() {
             총 <span style={{ fontWeight: 800, color: '#1A1B22' }}>{drugs.length}</span>개 약을 찾았어요
           </div>
 
-          {/* 지병 약 섹션 */}
-          {diseaseDrugs.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ display: 'block', width: 6, height: 6, borderRadius: 3, backgroundColor: '#E91E63', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1A1B22' }}>지병 약 {diseaseDrugs.length}개</span>
-              </div>
-              {diseaseDrugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
-            </div>
-          )}
-
-          {/* 보조 약물 섹션 */}
-          {otherDrugs.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ display: 'block', width: 6, height: 6, borderRadius: 3, backgroundColor: '#74757D', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1A1B22' }}>보조 약물 {otherDrugs.length}개</span>
-              </div>
-              {otherDrugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
-            </div>
-          )}
+          {drugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
         </div>
 
         {/* 처방전 다시 찍기 */}

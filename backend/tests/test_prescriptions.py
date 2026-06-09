@@ -18,7 +18,7 @@ def test_get_prescriptions_returns_empty_list():
 def test_post_prescription_creates_prescription():
     response = client.post("/prescriptions", json={
         "name": "내과 처방전",
-        "drugs": [{"name": "메트포르민", "purpose": "혈당조절"}]
+        "drugs": [{"name": "메트포르민"}]
     })
     assert response.status_code == 200
     data = response.json()
@@ -30,11 +30,11 @@ def test_post_prescription_creates_prescription():
 def test_get_prescriptions_returns_all():
     client.post("/prescriptions", json={
         "name": "내과 처방전",
-        "drugs": [{"name": "메트포르민", "purpose": "혈당조절"}]
+        "drugs": [{"name": "메트포르민"}]
     })
     client.post("/prescriptions", json={
         "name": "외과 처방전",
-        "drugs": [{"name": "아스피린", "purpose": "혈압"}]
+        "drugs": [{"name": "아스피린"}]
     })
     response = client.get("/prescriptions")
     assert response.status_code == 200
@@ -44,13 +44,13 @@ def test_get_prescriptions_returns_all():
 def test_put_prescription_updates_prescription():
     post_resp = client.post("/prescriptions", json={
         "name": "내과 처방전",
-        "drugs": [{"name": "메트포르민", "purpose": "혈당조절"}]
+        "drugs": [{"name": "메트포르민"}]
     })
     prescription_id = post_resp.json()["id"]
 
     response = client.put(f"/prescriptions/{prescription_id}", json={
         "name": "수정된 처방전",
-        "drugs": [{"name": "아스피린", "purpose": "혈압"}]
+        "drugs": [{"name": "아스피린"}]
     })
     assert response.status_code == 200
     data = response.json()
@@ -70,7 +70,7 @@ def test_put_prescription_returns_404_when_not_found():
 def test_delete_prescription_removes_prescription():
     post_resp = client.post("/prescriptions", json={
         "name": "내과 처방전",
-        "drugs": [{"name": "메트포르민", "purpose": "혈당조절"}]
+        "drugs": [{"name": "메트포르민"}]
     })
     prescription_id = post_resp.json()["id"]
 

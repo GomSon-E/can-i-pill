@@ -1,6 +1,5 @@
 export interface OcrDrug {
   name: string
-  purpose: '지병 약' | '보조 약물'
 }
 
 export interface OcrResult {

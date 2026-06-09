@@ -17,13 +17,9 @@ export default function Sub07() {
   useEffect(() => {
     if (ocrStore.result) {
       setPrescriptionName(ocrStore.result.name)
-      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, purpose: d.purpose ?? '보조 약물', id: i })))
+      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, id: i })))
     }
   }, [])
-
-  function handleChangePurpose(id: number, purpose: '지병 약' | '보조 약물') {
-    setDrugs(prev => prev.map(d => d.id === id ? { ...d, purpose } : d))
-  }
 
   function handleDelete(id: number) {
     setDrugs(prev => prev.filter(d => d.id !== id))
@@ -43,9 +39,6 @@ export default function Sub07() {
     }, 1500)
   }
 
-  const diseaseDrugs = drugs.filter(d => d.purpose === '지병 약')
-  const otherDrugs = drugs.filter(d => d.purpose === '보조 약물')
-
   function DrugCard({ drug }: { drug: DrugItem }) {
     return (
       <div style={{
@@ -53,31 +46,13 @@ export default function Sub07() {
         backgroundColor: '#FDF2F5', borderRadius: 10, padding: '9px 12px', marginBottom: 6,
       }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#1A1B22', flex: 1 }}>{drug.name}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {(['지병 약', '보조 약물'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => handleChangePurpose(drug.id, p)}
-              style={{
-                fontSize: 12, fontWeight: 600, padding: '3px 8px',
-                border: drug.purpose === p ? '1.5px solid #E91E63' : '1.5px solid #ddd',
-                borderRadius: 20,
-                background: drug.purpose === p ? '#E91E63' : '#fff',
-                color: drug.purpose === p ? '#fff' : '#8B8C96',
-                cursor: 'pointer', fontFamily: 'inherit',
-              }}
-            >
-              {p}
-            </button>
-          ))}
-          <button
-            aria-label="삭제"
-            onClick={() => handleDelete(drug.id)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B8C96', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
-          >
-            ×
-          </button>
-        </div>
+        <button
+          aria-label="삭제"
+          onClick={() => handleDelete(drug.id)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8B8C96', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+        >
+          ×
+        </button>
       </div>
     )
   }
@@ -139,25 +114,7 @@ export default function Sub07() {
             총 <span style={{ fontWeight: 800, color: '#1A1B22' }}>{drugs.length}</span>개 약을 찾았어요
           </div>
 
-          {diseaseDrugs.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ display: 'block', width: 6, height: 6, borderRadius: 3, backgroundColor: '#E91E63', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1A1B22' }}>지병 약 {diseaseDrugs.length}개</span>
-              </div>
-              {diseaseDrugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
-            </div>
-          )}
-
-          {otherDrugs.length > 0 && (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <span style={{ display: 'block', width: 6, height: 6, borderRadius: 3, backgroundColor: '#74757D', flexShrink: 0 }} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1A1B22' }}>보조 약물 {otherDrugs.length}개</span>
-              </div>
-              {otherDrugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
-            </div>
-          )}
+          {drugs.map(drug => <DrugCard key={drug.id} drug={drug} />)}
         </div>
 
         <button

@@ -14,8 +14,8 @@ vi.mock('react-router-dom', async () => {
 const ocrResult = {
   name: '내과 처방전 2026-05',
   drugs: [
-    { name: '메트포르민', purpose: '지병 약' },
-    { name: '아스피린', purpose: '보조 약물' },
+    { name: '메트포르민' },
+    { name: '아스피린' },
   ],
 }
 
@@ -49,7 +49,7 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     expect(screen.getByTestId('page-ob-03')).toBeInTheDocument()
   })
 
-  it('"처방전 사진 찍기" 탭 시 POST /ocr 호출', async () => {
+  it('파일 선택 시 POST /ocr 호출', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -58,7 +58,9 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     renderOb03()
-    await userEvent.click(screen.getByRole('button', { name: /처방전 사진 찍기/ }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['img'], 'prescription.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -68,7 +70,7 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     })
   })
 
-  it('"처방전 사진 찍기" 탭 시 OCR 결과를 ocrStore에 저장', async () => {
+  it('파일 선택 시 OCR 결과를 ocrStore에 저장', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -76,14 +78,16 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     }))
 
     renderOb03()
-    await userEvent.click(screen.getByRole('button', { name: /처방전 사진 찍기/ }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['img'], 'prescription.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
     await waitFor(() => {
       expect(ocrStore.result).toEqual(ocrResult)
     })
   })
 
-  it('"처방전 사진 찍기" 탭 시 /ob-04로 이동', async () => {
+  it('파일 선택 시 /ob-04로 이동', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -91,7 +95,9 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     }))
 
     renderOb03()
-    await userEvent.click(screen.getByRole('button', { name: /처방전 사진 찍기/ }))
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['img'], 'prescription.jpg', { type: 'image/jpeg' })
+    await userEvent.upload(fileInput, file)
 
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/ob-04')
@@ -113,18 +119,11 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     expect(input).toBeInTheDocument()
   })
 
-  it('OB-04: 지병 약 섹션에 메트포르민 표시', () => {
+  it('OB-04: 약물 목록에 메트포르민·아스피린 표시', () => {
     ocrStore.result = ocrResult
     renderOb04()
     expect(screen.getByText('메트포르민')).toBeInTheDocument()
-    expect(screen.getAllByText('지병 약').length).toBeGreaterThan(0)
-  })
-
-  it('OB-04: 보조 약물 섹션에 아스피린 표시', () => {
-    ocrStore.result = ocrResult
-    renderOb04()
     expect(screen.getByText('아스피린')).toBeInTheDocument()
-    expect(screen.getAllByText('보조 약물').length).toBeGreaterThan(0)
   })
 
   it('OB-04: 처방전 이름 수정 가능', async () => {
@@ -134,26 +133,6 @@ describe('S-07: 처방전 촬영 및 약물 확인', () => {
     await userEvent.clear(input)
     await userEvent.type(input, '새로운 처방전')
     expect(input.value).toBe('새로운 처방전')
-  })
-
-  it('OB-04: 약물 카드의 용도 변경 칩 버튼 클릭 시 purpose 변경', async () => {
-    ocrStore.result = {
-      name: '내과 처방전 2026-05',
-      drugs: [
-        { name: '메트포르민', purpose: '지병 약' },
-        { name: '아스피린', purpose: '보조 약물' },
-      ],
-    }
-    renderOb04()
-
-    // 메트포르민 카드에서 '보조 약물' 칩 클릭 → purpose가 바뀌어야 함
-    // 처음엔 '지병 약' 섹션에 있음. '보조 약물' 칩 클릭
-    const chipButtons = screen.getAllByRole('button', { name: '보조 약물' })
-    await userEvent.click(chipButtons[0])
-
-    // 이제 메트포르민이 보조 약물 섹션에도 표시됨 (또는 purpose가 업데이트됨)
-    // 최소 검증: 메트포르민이 여전히 렌더링됨
-    expect(screen.getByText('메트포르민')).toBeInTheDocument()
   })
 
   it('OB-04: 약물 카드 X 버튼 클릭 시 해당 약 삭제', async () => {
