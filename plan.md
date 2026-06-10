@@ -392,8 +392,8 @@
 - [x] `gather_context` 테스트: 백엔드 API가 모두 비어있거나 404인 경우 → `drugs: [], supplements: [], health_conditions: [], allergies: []`
 - [x] `gather_context` 테스트: 처방전/영양제/건강정보 응답이 있는 경우 → 분석용 dict로 정규화
 - [x] `ask_clarification(reason: str) → dict` 구현 — `{ clarification_prompt: str }` 반환
-- [ ] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
-- [ ] `analyze` 테스트: level이 항상 `safe | caution | danger` 중 하나
+- [x] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
+- [x] `analyze` 테스트: level이 항상 `safe | caution | danger` 중 하나
 - [ ] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
 - [ ] `finish(result: dict) → dict` 구현 — `{ type: "analysis", **result }` 반환
 

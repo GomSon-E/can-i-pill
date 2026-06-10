@@ -93,3 +93,29 @@ def gather_context() -> dict:
 
 def ask_clarification(reason: str) -> dict:
     return {"clarification_prompt": reason}
+
+
+def _generate_analysis(question: str, context: str) -> dict:
+    from app.routers.ai import MODEL, _client, _ANALYSIS_RULES, _ANALYSIS_SCHEMA
+
+    context_section = f"\n[사용자 프로필 및 복용 약]\n{context}" if context else ""
+    prompt = f"{_ANALYSIS_RULES}{context_section}\n\n[질문]\n\"{question}\""
+
+    response = _client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=_ANALYSIS_SCHEMA,
+        ),
+    )
+    return json.loads(response.text)
+
+
+def analyze(question: str, context: str) -> dict:
+    data = {}
+    for _ in range(3):
+        data = _generate_analysis(question, context)
+        if data.get("level") in ("safe", "caution", "danger"):
+            return data
+    return data
