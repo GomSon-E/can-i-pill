@@ -445,3 +445,38 @@
 - [x] `Main04.tsx`: 응답 type이 `"error"`이면 message 표시 후 Main02 복귀
 - [x] `Main04.tsx`: 응답 type이 `"analysis"`이면 기존대로 Main05 이동
 - [x] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시
+
+### H-8. 제안서 정합화 — Agent 자율 분기 / Self-Evaluate 외부 루프 / 멀티 에이전트 병렬 분석
+
+> `docs/analyze-agentic-redesign-proposal.md` 대비 단순화되어 구현된 3가지 지점을 제안서 설계대로 재정렬한다.
+> (`finish` 호출 시 `last_analyze_result`를 백필하는 보정 로직은 실용적 추가로 유지하며 이번 변경 대상이 아니다.)
+
+#### H-8-1. validate_query 이후 분기를 Agent 자율 선택으로 전환
+
+- [x] `run_agent`에서 `validate_query` 관측 직후 `is_relevant`/`is_clear`를 검사해 `reject`/`ask_clarification`을 직접 호출하는 결정론적 분기 코드 제거
+- [x] `HARNESS_POLICY["goal"]` 또는 tool description에 "validate_query 결과의 is_relevant/is_clear/missing_info를 보고 다음 action(reject/ask_clarification/gather_context 등)을 직접 선택하라"는 지침 보강
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=false`) 관측 후 다음 호출에서 agent가 직접 `reject`를 선택 → run_agent가 결정론적 분기 없이 completion_conditions만으로 종료하고 `{ type: "rejection", ... }` 반환
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=true, is_clear=false`) 관측 후 다음 호출에서 agent가 직접 `ask_clarification`을 선택 → `{ clarification_prompt: ... }` 반환
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=true, is_clear=true`) 관측 후 다음 호출에서 agent가 `gather_context` 또는 `analyze`를 선택해 정상 진행
+- [x] 기존 H-4 "분기 규칙" 테스트(무관/불명확 질문 케이스)를 위 agent 선택 기반 시나리오로 갱신
+
+#### H-8-2. Self-Evaluate 재시도를 외부 루프 구조로 전환
+
+- [ ] `run_agent`의 단일 패스(validate → gather_context → analyze → finish, max_steps 소비)를 내부 헬퍼(예: `_run_episode(messages, trace) → (action_name, observation)`)로 추출 — completion_conditions 도달 또는 max_steps 도달 시 반환
+- [ ] 테스트: `_run_episode`가 `finish` 도달 시 `("finish", observation)` 반환, max_steps 도달 시 `("error", {...})` 반환
+- [ ] `run_agent`를 `while not task_completed:` 형태의 외부 루프로 재작성 — `_run_episode` 호출 → `finish` 결과면 `evaluate()` 호출 → 미달 시 issues를 messages에 기록하고 `_run_episode`를 재호출(최대 2회), 매 회마다 max_steps 예산을 새로 부여
+- [ ] 테스트: 1차 `_run_episode` 결과가 evaluate 실패(score < 70) → 2차 `_run_episode`가 새로운 max_steps 예산으로 재실행되어 더 긴 응답 반환 (기존 self-evaluate 재시도 테스트를 새 구조로 갱신)
+- [ ] 테스트: `reject` / `ask_clarification` / `error`로 종료된 episode는 `evaluate` 없이 즉시 반환 (self-evaluate는 `finish` 경로에만 적용)
+
+#### H-8-3. 복합 항목 멀티 에이전트 병렬 분석 (예시 5)
+
+- [ ] `tools.py`에 `analyze_item(item: str, context: str) → dict` 구현 — 단일 항목에 대한 `{ name, level, doctorOpinion, pharmacistOpinion, alternatives }` 반환 (기존 `analyze`의 분석 규칙을 항목 단위로 재사용)
+- [ ] 테스트: `analyze_item`은 항상 `level ∈ {safe, caution, danger}` 및 `name == item` 반환
+- [ ] `harness.py`에 `run_sub_agents(items: list[str], context: str) → list[dict]` 구현 — `asyncio.gather` + `asyncio.to_thread`로 항목별 `analyze_item`을 병렬 실행
+- [ ] 테스트: `run_sub_agents`가 mock된 `analyze_item`을 항목 수만큼 병렬 호출하고 입력 순서대로 결과 리스트 반환
+- [ ] `run_agent` 분기: `validate_query` 관측의 `items` 길이가 2 이상이고 agent가 `analyze`를 선택하면 단일 `analyze` 대신 `run_sub_agents` 결과를 관측으로 사용
+- [ ] `finish`/응답 스키마에 `items: [{ name, level, doctorOpinion, pharmacistOpinion, alternatives }, ...]` 필드 추가, 최상위 `level`은 `items` 중 최고 위험도(`danger > caution > safe`)로 산출
+- [ ] 테스트: `validate_query`의 `items`가 2개 이상인 질문 → `finish` 결과에 `items` 배열과 최고 위험도 `level` 포함
+- [ ] 테스트: 기존 단일 항목 질문은 `items` 없이 기존 응답 스키마 유지 (회귀 방지)
+- [ ] `frontend/src/store/analyzeStore.ts`의 `AnalyzeResult`에 옵셔널 `items?: AnalyzeItem[]` 필드 추가
+- [ ] `Main05.tsx`에서 `items`가 있으면 항목별 결과를 표시하고, 없으면 기존 단일 결과 표시를 유지

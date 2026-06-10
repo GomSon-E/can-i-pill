@@ -162,18 +162,37 @@ def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
     }
 
 
-def test_run_agent_rejects_irrelevant_question_within_two_steps(monkeypatch):
+def test_harness_policy_goal_describes_validate_query_branching():
     module = importlib.import_module("app.harness.harness")
 
+    goal = module.HARNESS_POLICY["goal"]
+
+    assert "is_relevant" in goal
+    assert "is_clear" in goal
+    assert "reject" in goal
+    assert "ask_clarification" in goal
+
+
+def test_run_agent_lets_agent_choose_reject_after_validate_query(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "오늘 날씨 어때?"}),
+        ("reject", {"reason": "이 질문은 서비스 범위를 벗어났습니다."}),
+    ])
+
     def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
-        return "validate_query", {"question": "오늘 날씨 어때?"}
+        return next(planned_actions)
 
     calls = []
 
     def fake_execute_tool(name, args):
         calls.append(name)
-        assert name == "validate_query"
-        return {"is_relevant": False, "is_clear": True, "items": [], "missing_info": []}
+        if name == "validate_query":
+            return {"is_relevant": False, "is_clear": True, "items": [], "missing_info": []}
+        if name == "reject":
+            return {"type": "rejection", "message": args["reason"]}
+        raise AssertionError(f"unexpected tool call: {name}")
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
@@ -181,17 +200,28 @@ def test_run_agent_rejects_irrelevant_question_within_two_steps(monkeypatch):
     result = module.run_agent("오늘 날씨 어때?")
 
     assert result["type"] == "rejection"
+    assert result["message"] == "이 질문은 서비스 범위를 벗어났습니다."
+    assert [step["action"] for step in result["trace"]] == ["validate_query", "reject"]
     assert len(calls) <= 2
 
 
 def test_run_agent_rejects_irrelevant_and_unclear_question(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
+    planned_actions = iter([
+        ("validate_query", {"question": "이거요"}),
+        ("reject", {"reason": "질문이 모호하고 서비스 범위를 벗어났습니다."}),
+    ])
+
     def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
-        return "validate_query", {"question": "이거요"}
+        return next(planned_actions)
 
     def fake_execute_tool(name, args):
-        return {"is_relevant": False, "is_clear": False, "items": [], "missing_info": ["대상"]}
+        if name == "validate_query":
+            return {"is_relevant": False, "is_clear": False, "items": [], "missing_info": ["대상"]}
+        if name == "reject":
+            return {"type": "rejection", "message": args["reason"]}
+        raise AssertionError(f"unexpected tool call: {name}")
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
@@ -201,30 +231,39 @@ def test_run_agent_rejects_irrelevant_and_unclear_question(monkeypatch):
     assert result["type"] == "rejection"
 
 
-def test_run_agent_asks_clarification_for_unclear_question_within_two_steps(monkeypatch):
+def test_run_agent_lets_agent_choose_ask_clarification_after_validate_query(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
+    planned_actions = iter([
+        ("validate_query", {"question": "이거 먹어도 돼요?"}),
+        ("ask_clarification", {"reason": "섭취하려는 항목을 알려주세요."}),
+    ])
+
     def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
-        return "validate_query", {"question": "이거 먹어도 돼요?"}
+        return next(planned_actions)
 
     calls = []
 
     def fake_execute_tool(name, args):
         calls.append(name)
-        assert name == "validate_query"
-        return {
-            "is_relevant": True,
-            "is_clear": False,
-            "items": [],
-            "missing_info": ["섭취하려는 항목"],
-        }
+        if name == "validate_query":
+            return {
+                "is_relevant": True,
+                "is_clear": False,
+                "items": [],
+                "missing_info": ["섭취하려는 항목"],
+            }
+        if name == "ask_clarification":
+            return {"clarification_prompt": args["reason"]}
+        raise AssertionError(f"unexpected tool call: {name}")
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
 
     result = module.run_agent("이거 먹어도 돼요?")
 
-    assert "clarification_prompt" in result
+    assert result["clarification_prompt"] == "섭취하려는 항목을 알려주세요."
+    assert [step["action"] for step in result["trace"]] == ["validate_query", "ask_clarification"]
     assert len(calls) <= 2
 
 

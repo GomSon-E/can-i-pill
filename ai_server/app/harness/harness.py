@@ -16,7 +16,12 @@ HARNESS_POLICY = {
     "goal": (
         "사용자의 약물·영양제·음식 상호작용 질문에 대해 "
         "validate_query → gather_context → analyze → finish 순서로 분석하고, "
-        "필요 시 self-evaluate 재시도(최대 2회)를 거쳐 답변 품질을 보장한다."
+        "필요 시 self-evaluate 재시도(최대 2회)를 거쳐 답변 품질을 보장한다.\n"
+        "validate_query 관측 결과를 직접 보고 다음 action을 선택하라: "
+        "is_relevant가 false이면 reject를 선택하고, "
+        "is_relevant가 true이지만 is_clear가 false이면 missing_info를 바탕으로 "
+        "ask_clarification을 선택하라. is_relevant와 is_clear가 모두 true이면 "
+        "gather_context로 진행하라."
     ),
     "allowed_actions": [
         "validate_query",
@@ -148,22 +153,6 @@ def run_agent(question: str, extra_context: str = "") -> dict:
 
         if action_name == "analyze":
             last_analyze_result = observation
-
-        if action_name == "validate_query":
-            if not observation.get("is_relevant"):
-                result = reject("이 질문은 약물·영양제·음식 상호작용 분석 서비스의 범위를 벗어났습니다.")
-                result["trace"] = trace
-                return result
-            if not observation.get("is_clear"):
-                missing_info = observation.get("missing_info") or []
-                reason = (
-                    "다음 정보가 더 필요합니다: " + ", ".join(missing_info)
-                    if missing_info
-                    else "질문이 명확하지 않습니다."
-                )
-                result = ask_clarification(reason)
-                result["trace"] = trace
-                return result
 
         if action_name == "finish":
             passed, score, issues = evaluate(observation, question)
