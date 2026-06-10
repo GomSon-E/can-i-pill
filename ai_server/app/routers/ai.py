@@ -205,58 +205,6 @@ async def label(image: UploadFile = File(...)):
     return _normalize_label_result(json.loads(response.text))
 
 
-_ANALYSIS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "level": {"type": "string", "enum": ["safe", "caution", "danger"]},
-        "doctorOpinion": {
-            "type": "object",
-            "properties": {
-                "summary": {"type": "string"},
-                "detail": {"type": "string"},
-            },
-            "required": ["summary", "detail"],
-        },
-        "pharmacistOpinion": {
-            "type": "object",
-            "properties": {
-                "summary": {"type": "string"},
-                "detail": {"type": "string"},
-            },
-            "required": ["summary", "detail"],
-        },
-        "alternatives": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["level", "doctorOpinion", "pharmacistOpinion", "alternatives"],
-}
-
-_ANALYSIS_RULES = (
-    "당신은 50~60대 사용자를 돕는 약물·영양제·음식 상호작용 안내 도우미입니다.\n"
-    "아래 사용자의 약물 프로필과 질문을 바탕으로, 질문한 항목을 함께 드셔도 되는지 판단하세요.\n"
-    "\n"
-    "[판단 규칙]\n"
-    "- level은 반드시 'safe' / 'caution' / 'danger' 중 하나로만.\n"
-    "- 등급 정의:\n"
-    "  · danger(위험): 함께 섭취를 피해야 하는 급성·심각 위해. 출혈, 심장 리듬 이상(QT 연장·부정맥), "
-    "세로토닌 증후군, 혈압 급상승, 심한 간·신장 손상처럼 되돌리기 어렵거나 생명에 위협이 될 수 있는 경우.\n"
-    "  · caution(주의): 복용 시간 간격을 두거나 양·복용법을 조절하면 관리되는 경우. "
-    "흡수율 저하(약효 감소), 경미~중등도 부작용 증가 등 → 회피가 아니라 '시간 띄우기·모니터링'으로 대응.\n"
-    "  · safe(안전): 알려진 상호작용이 전혀 없고 일반적인 섭취량에서 문제되지 않는 경우.\n"
-    "- [중요 정책] 이 서비스는 상호작용 '경고' 도우미입니다. 근거상 어떤 상호작용이라도 있으면 "
-    "(흡수율 저하처럼 시간 간격으로 관리되는 경미한 것 포함) **최소 caution**으로 안내하세요. "
-    "safe는 알려진 상호작용이 전혀 없을 때만 사용합니다.\n"
-    "- 위험을 과소평가하지 마세요. 단, 시간 간격으로 관리되는 흡수저하 등을 danger로 과장하지도 마세요"
-    "(이런 경우는 caution). 정말 애매하면 한 단계 보수적으로 판단.\n"
-    "[작성 규칙]\n"
-    "- 어려운 의학용어 금지. 50~60대가 바로 이해할 쉬운 말로.\n"
-    "- 각 summary는 한 문장(40자 이내). 각 detail은 2~4문장.\n"
-    "- doctorOpinion은 몸에 생길 수 있는 변화 중심, pharmacistOpinion은 복용 방법·시간 간격 중심.\n"
-    "- 진단·처방이 아니며 증상이 있으면 의사·약사와 상담하라는 취지를 detail에 자연스럽게 포함.\n"
-    "- alternatives는 더 안전한 대체 식품/영양제 0~3개. safe면 빈 배열도 가능.\n"
-    "- 추측성 수치나 출처 불명 정보 금지.\n"
-)
-
-
 @router.post("/analyze")
 async def analyze(body: AnalyzeRequest):
     start = time.monotonic()
