@@ -1,5 +1,6 @@
 import asyncio
 import re
+import threading
 
 from google.genai import types
 
@@ -134,11 +135,37 @@ async def run_sub_agents(items: list, context: str) -> list:
     )
 
 
+def _run_sub_agents_sync(items: list, context: str) -> list:
+    box = {}
+
+    def runner():
+        try:
+            box["result"] = asyncio.run(run_sub_agents(items, context))
+        except Exception as exc:
+            box["error"] = exc
+
+    thread = threading.Thread(target=runner)
+    thread.start()
+    thread.join()
+
+    if "error" in box:
+        raise box["error"]
+    return box["result"]
+
+
+_LEVEL_RANK = {"safe": 0, "caution": 1, "danger": 2}
+
+
+def _aggregate_level(items: list) -> str:
+    return max((item.get("level", "safe") for item in items), key=lambda level: _LEVEL_RANK.get(level, 0))
+
+
 _MAX_SELF_EVALUATE_RETRIES = 2
 
 
 def _run_episode(messages, trace):
     last_analyze_result = None
+    items = []
 
     for _ in range(HARNESS_POLICY["max_steps"]):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
@@ -146,10 +173,18 @@ def _run_episode(messages, trace):
         if action_name == "finish" and last_analyze_result:
             action_args = {"result": {**last_analyze_result, **(action_args.get("result") or {})}}
 
-        observation = execute_tool(action_name, action_args)
+        if action_name == "analyze" and len(items) >= 2:
+            item_results = _run_sub_agents_sync(items, action_args.get("context", ""))
+            observation = {"items": item_results, "level": _aggregate_level(item_results)}
+        else:
+            observation = execute_tool(action_name, action_args)
+
         trace.append({"action": action_name, "args": action_args, "observation": observation})
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
+
+        if action_name == "validate_query":
+            items = observation.get("items") or []
 
         if action_name == "analyze":
             last_analyze_result = observation
@@ -204,8 +239,13 @@ def evaluate(result: dict, question: str) -> tuple:
     score = 100
     issues = []
 
-    doctor_detail = result.get("doctorOpinion", {}).get("detail", "")
-    pharmacist_detail = result.get("pharmacistOpinion", {}).get("detail", "")
+    items = result.get("items")
+    if items:
+        doctor_detail = " ".join(item.get("doctorOpinion", {}).get("detail", "") for item in items)
+        pharmacist_detail = " ".join(item.get("pharmacistOpinion", {}).get("detail", "") for item in items)
+    else:
+        doctor_detail = result.get("doctorOpinion", {}).get("detail", "")
+        pharmacist_detail = result.get("pharmacistOpinion", {}).get("detail", "")
     combined = f"{doctor_detail} {pharmacist_detail}"
 
     if _sentence_count(doctor_detail) < 2 or _sentence_count(pharmacist_detail) < 2:

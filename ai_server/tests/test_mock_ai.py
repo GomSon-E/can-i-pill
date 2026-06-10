@@ -4,6 +4,17 @@ from app.main import app
 client = TestClient(app)
 
 
+def _assert_analysis_shape(entry):
+    assert entry["level"] in ["safe", "caution", "danger"]
+    assert isinstance(entry["doctorOpinion"], dict)
+    assert isinstance(entry["pharmacistOpinion"], dict)
+    assert "summary" in entry["doctorOpinion"]
+    assert "detail" in entry["doctorOpinion"]
+    assert "summary" in entry["pharmacistOpinion"]
+    assert "detail" in entry["pharmacistOpinion"]
+    assert isinstance(entry["alternatives"], list)
+
+
 def test_post_ocr_without_image_returns_422():
     response = client.post("/ocr")
     assert response.status_code == 422
@@ -83,10 +94,12 @@ def test_post_analyze_returns_mock_analysis():
     assert response.status_code == 200
     data = response.json()
     assert "level" in data
-    assert "doctorOpinion" in data
-    assert "pharmacistOpinion" in data
-    assert "alternatives" in data
     assert data["level"] in ["safe", "caution", "danger"]
+    if "items" in data:
+        for item in data["items"]:
+            _assert_analysis_shape(item)
+    else:
+        _assert_analysis_shape(data)
 
 
 def test_post_analyze_reflects_question():
@@ -98,7 +111,10 @@ def test_post_analyze_reflects_question():
     assert response.status_code == 200
     # The response should be meaningful
     data = response.json()
-    assert len(data["doctorOpinion"]["summary"]) > 0
+    if "items" in data:
+        assert len(data["items"][0]["doctorOpinion"]["summary"]) > 0
+    else:
+        assert len(data["doctorOpinion"]["summary"]) > 0
 
 
 def test_post_analyze_returns_new_schema():
@@ -110,16 +126,13 @@ def test_post_analyze_returns_new_schema():
     data = response.json()
     assert "level" in data
     assert data["level"] in ["safe", "caution", "danger"]
-    assert "doctorOpinion" in data
-    assert "pharmacistOpinion" in data
-    assert "alternatives" in data
-    assert isinstance(data["doctorOpinion"], dict)
-    assert isinstance(data["pharmacistOpinion"], dict)
-    assert "summary" in data["doctorOpinion"]
-    assert "detail" in data["doctorOpinion"]
-    assert "summary" in data["pharmacistOpinion"]
-    assert "detail" in data["pharmacistOpinion"]
-    assert isinstance(data["alternatives"], list)
+    if "items" in data:
+        assert isinstance(data["items"], list)
+        for item in data["items"]:
+            assert "name" in item
+            _assert_analysis_shape(item)
+    else:
+        _assert_analysis_shape(data)
 
 
 def test_post_analyze_level_values_are_valid():

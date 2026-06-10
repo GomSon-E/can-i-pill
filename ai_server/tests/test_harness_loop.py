@@ -339,6 +339,7 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
     ]
     assert result["trace"][0]["args"] == {"question": "홍삼 먹어도 되나요?"}
     assert result["trace"][0]["observation"]["is_relevant"] is True
+    assert "items" not in result
 
 
 def test_run_agent_includes_client_context_as_supplementary_info(monkeypatch):
@@ -703,3 +704,57 @@ def test_run_sub_agents_calls_analyze_item_in_parallel_and_preserves_order(monke
 
     assert [r["name"] for r in results] == ["홍삼", "비타민C"]
     assert set(calls) == {"홍삼", "비타민C"}
+
+
+def test_run_agent_returns_items_and_aggregated_level_for_multi_item_question(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    item_results = [
+        {
+            "name": "홍삼",
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "혈압약 효과가 줄어들 수 있습니다. 복용 후 변화를 살펴보세요."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "복용 시간을 2시간 띄우세요. 의사나 약사와 상담하세요."},
+            "alternatives": [],
+        },
+        {
+            "name": "비타민C",
+            "level": "danger",
+            "doctorOpinion": {"summary": "요약", "detail": "출혈 위험이 커질 수 있습니다. 즉시 복용을 중단하세요."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "복용 간격을 두고 의사와 상담하세요. 약사에게도 알리세요."},
+            "alternatives": [],
+        },
+    ]
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {}}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    async def fake_run_sub_agents(items, context):
+        assert items == ["홍삼", "비타민C"]
+        return item_results
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "run_sub_agents", fake_run_sub_agents)
+
+    result = module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert result["items"] == item_results
+    assert result["level"] == "danger"
