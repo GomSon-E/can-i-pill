@@ -89,3 +89,7 @@ def gather_context() -> dict:
         "health_conditions": health.get("conditions", []),
         "allergies": health.get("allergies", []),
     }
+
+
+def ask_clarification(reason: str) -> dict:
+    return {"clarification_prompt": reason}
