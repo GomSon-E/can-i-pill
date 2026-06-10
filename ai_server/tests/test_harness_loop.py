@@ -256,15 +256,27 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
         },
         "analyze": {
             "level": "safe",
-            "doctorOpinion": {"summary": "요약", "detail": "상세"},
-            "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "혈압약과 함께 먹어도 큰 문제는 없습니다. 다만 컨디션 변화를 살펴보세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "복용 시간 간격을 2시간 정도 두면 더 안전합니다. 추가 증상이 있으면 의사나 약사와 상담하세요.",
+            },
             "alternatives": [],
         },
         "finish": {
             "type": "analysis",
             "level": "safe",
-            "doctorOpinion": {"summary": "요약", "detail": "상세"},
-            "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "혈압약과 함께 먹어도 큰 문제는 없습니다. 다만 컨디션 변화를 살펴보세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "복용 시간 간격을 2시간 정도 두면 더 안전합니다. 추가 증상이 있으면 의사나 약사와 상담하세요.",
+            },
             "alternatives": [],
         },
     }
@@ -327,3 +339,58 @@ def test_evaluate_sufficient_detail_with_guidance_and_consultation_scores_at_lea
     assert passed is True
     assert score >= 70
     assert issues == []
+
+
+def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    short_result = {
+        "level": "safe",
+        "doctorOpinion": {"summary": "요약", "detail": "괜찮습니다."},
+        "pharmacistOpinion": {"summary": "요약", "detail": "주의하세요."},
+        "alternatives": [],
+    }
+    long_result = {
+        "level": "safe",
+        "doctorOpinion": {
+            "summary": "요약",
+            "detail": "혈압약과 함께 먹으면 흡수가 줄어들 수 있습니다. 복용 시간을 2시간 이상 띄우는 것이 좋습니다.",
+        },
+        "pharmacistOpinion": {
+            "summary": "요약",
+            "detail": "약 복용 후 2시간 간격을 두고 섭취하세요. 추가로 궁금한 점은 의사나 약사와 상담하세요.",
+        },
+        "alternatives": [],
+    }
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": short_result}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": long_result}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return {}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert "복용 시간" in result["doctorOpinion"]["detail"]
+    assert len(result["trace"]) == 6
