@@ -119,3 +119,7 @@ def analyze(question: str, context: str) -> dict:
         if data.get("level") in ("safe", "caution", "danger"):
             return data
     return data
+
+
+def reject(reason: str) -> dict:
+    return {"type": "rejection", "message": reason}

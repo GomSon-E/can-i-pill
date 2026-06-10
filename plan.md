@@ -394,7 +394,7 @@
 - [x] `ask_clarification(reason: str) → dict` 구현 — `{ clarification_prompt: str }` 반환
 - [x] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
 - [x] `analyze` 테스트: level이 항상 `safe | caution | danger` 중 하나
-- [ ] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
+- [x] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
 - [ ] `finish(result: dict) → dict` 구현 — `{ type: "analysis", **result }` 반환
 
 ### H-4. Harness 루프 구현 (harness.py)
