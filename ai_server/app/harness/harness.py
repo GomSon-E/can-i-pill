@@ -121,9 +121,13 @@ def execute_tool(name, args):
     return _TOOL_FUNCTIONS[name](**args)
 
 
+_MAX_SELF_EVALUATE_RETRIES = 2
+
+
 def run_agent(question: str) -> dict:
     messages = [f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"]
     trace = []
+    eval_retries = 0
 
     for _ in range(HARNESS_POLICY["max_steps"]):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
@@ -147,6 +151,20 @@ def run_agent(question: str) -> dict:
                 result = ask_clarification(reason)
                 result["trace"] = trace
                 return result
+
+        if action_name == "finish":
+            passed, score, issues = evaluate(observation, question)
+            if not passed and eval_retries < _MAX_SELF_EVALUATE_RETRIES:
+                eval_retries += 1
+                messages.append(
+                    f"[Self-Evaluate] score={score}, issues={issues}. "
+                    "답변 품질이 기준에 못 미칩니다. 위 문제를 보완해 analyze를 다시 호출하고 "
+                    "더 자세한 detail과 행동 지침, 상담 권유 문구를 포함하세요."
+                )
+                continue
+            result = dict(observation)
+            result["trace"] = trace
+            return result
 
         if action_name in HARNESS_POLICY["completion_conditions"]:
             result = dict(observation)

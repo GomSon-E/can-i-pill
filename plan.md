@@ -421,8 +421,8 @@
 - [x] `evaluate`: 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
 - [x] `evaluate`: 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
 - [x] `evaluate` 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
-- [ ] `run_agent`에 self-evaluate 재시도 통합 — evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
-- [ ] self-evaluate 재시도 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
+- [x] `run_agent`에 self-evaluate 재시도 통합 — evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
+- [x] self-evaluate 재시도 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
 
 ### H-6. /analyze 엔드포인트 통합
 
