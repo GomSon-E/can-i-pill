@@ -1,5 +1,14 @@
 from google.genai import types
 
+from app.harness.tools import (
+    validate_query,
+    gather_context,
+    ask_clarification,
+    analyze,
+    reject,
+    finish,
+)
+
 
 HARNESS_POLICY = {
     "goal": (
@@ -91,3 +100,20 @@ def _call_with_tools(messages, tool_declarations, client=None, model="gemini-3.1
     function_calls = response.function_calls or []
     first_call = function_calls[0]
     return first_call.name, first_call.args or {}
+
+
+_TOOL_FUNCTIONS = {
+    "validate_query": validate_query,
+    "gather_context": gather_context,
+    "ask_clarification": ask_clarification,
+    "analyze": analyze,
+    "reject": reject,
+    "finish": finish,
+}
+
+
+def execute_tool(name, args):
+    if name not in HARNESS_POLICY["allowed_actions"]:
+        raise PermissionError(f"Action '{name}' is not allowed")
+
+    return _TOOL_FUNCTIONS[name](**args)
