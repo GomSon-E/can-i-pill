@@ -77,6 +77,50 @@ def test_analyze_success_records_metric(monkeypatch):
     assert entry["success"] is True
 
 
+def test_analyze_harness_error_result_records_success_metric(monkeypatch):
+    metrics._METRICS_BUFFER.clear()
+
+    def fake_run_agent(question, extra_context=""):
+        return {"type": "error", "message": "모델이 도구 호출을 반환하지 않았습니다.", "trace": []}
+
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
+
+    client = TestClient(app)
+    response = client.post("/analyze", json={"question": "질문", "context": ""})
+
+    assert response.status_code == 200
+    assert response.json()["type"] == "error"
+    assert len(metrics._METRICS_BUFFER) == 1
+    entry = metrics._METRICS_BUFFER[0]
+    assert entry["endpoint"] == "/analyze"
+    assert entry["status_code"] == 200
+    assert entry["success"] is True
+
+
+def test_analyze_sub_agent_error_result_records_success_metric(monkeypatch):
+    metrics._METRICS_BUFFER.clear()
+
+    def fake_run_agent(question, extra_context=""):
+        return {
+            "type": "error",
+            "message": "복합 항목 분석 중 오류가 발생했습니다: sub-agent failed",
+            "trace": [{"action": "analyze", "args": {}, "observation": {"type": "error"}}],
+        }
+
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
+
+    client = TestClient(app)
+    response = client.post("/analyze", json={"question": "질문", "context": ""})
+
+    assert response.status_code == 200
+    assert response.json()["type"] == "error"
+    assert len(metrics._METRICS_BUFFER) == 1
+    entry = metrics._METRICS_BUFFER[0]
+    assert entry["endpoint"] == "/analyze"
+    assert entry["status_code"] == 200
+    assert entry["success"] is True
+
+
 def test_analyze_failure_records_metric_with_api_error_code(monkeypatch):
     metrics._METRICS_BUFFER.clear()
 

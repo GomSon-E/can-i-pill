@@ -108,6 +108,8 @@ def _call_with_tools(messages, tool_declarations, client=None, model="gemini-3.1
         ),
     )
     function_calls = response.function_calls or []
+    if not function_calls:
+        return "error", {"type": "error", "message": "모델이 도구 호출을 반환하지 않았습니다."}
     first_call = function_calls[0]
     return first_call.name, first_call.args or {}
 
@@ -163,28 +165,60 @@ def _aggregate_level(items: list) -> str:
 _MAX_SELF_EVALUATE_RETRIES = 2
 
 
-def _run_episode(messages, trace):
+def _run_episode(messages, trace, state=None):
+    if state is None:
+        state = {}
     last_analyze_result = None
-    items = []
 
     for _ in range(HARNESS_POLICY["max_steps"]):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
 
+        if action_name == "error":
+            observation = {
+                "type": "error",
+                "message": action_args.get("message") or "하네스 실행 중 오류가 발생했습니다.",
+            }
+            trace.append({"action": action_name, "args": action_args, "observation": observation})
+            messages.append(f"[Action] {action_name}({action_args})")
+            messages.append(f"[Observation] {observation}")
+            return action_name, observation
+
         if action_name == "finish" and last_analyze_result:
             action_args = {"result": {**last_analyze_result, **(action_args.get("result") or {})}}
 
+        items = state.get("items") or []
         if action_name == "analyze" and len(items) >= 2:
-            item_results = _run_sub_agents_sync(items, action_args.get("context", ""))
-            observation = {"items": item_results, "level": _aggregate_level(item_results)}
+            try:
+                item_results = _run_sub_agents_sync(items, action_args.get("context", ""))
+                observation = {"items": item_results, "level": _aggregate_level(item_results)}
+            except Exception as exc:
+                observation = {
+                    "type": "error",
+                    "message": f"복합 항목 분석 중 오류가 발생했습니다: {exc}",
+                }
+                trace.append({"action": action_name, "args": action_args, "observation": observation})
+                messages.append(f"[Action] {action_name}({action_args})")
+                messages.append(f"[Observation] {observation}")
+                return "error", observation
         else:
-            observation = execute_tool(action_name, action_args)
+            try:
+                observation = execute_tool(action_name, action_args)
+            except PermissionError:
+                observation = {
+                    "type": "error",
+                    "message": f"허용되지 않은 action입니다: {action_name}",
+                }
+                trace.append({"action": action_name, "args": action_args, "observation": observation})
+                messages.append(f"[Action] {action_name}({action_args})")
+                messages.append(f"[Observation] {observation}")
+                return "error", observation
 
         trace.append({"action": action_name, "args": action_args, "observation": observation})
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
 
         if action_name == "validate_query":
-            items = observation.get("items") or []
+            state["items"] = observation.get("items") or []
 
         if action_name == "analyze":
             last_analyze_result = observation
@@ -203,20 +237,28 @@ def run_agent(question: str, extra_context: str = "") -> dict:
         )
     messages = [initial_message]
     trace = []
+    state = {}
     eval_retries = 0
     task_completed = False
 
     while not task_completed:
-        action_name, observation = _run_episode(messages, trace)
+        action_name, observation = _run_episode(messages, trace, state)
 
         if action_name == "finish":
             passed, score, issues = evaluate(observation, question)
             if not passed and eval_retries < _MAX_SELF_EVALUATE_RETRIES:
                 eval_retries += 1
+                retry_items = state.get("items") or []
+                item_guidance = (
+                    f" 재분석 대상 항목: {', '.join(retry_items)}."
+                    if retry_items
+                    else ""
+                )
                 messages.append(
                     f"[Self-Evaluate] score={score}, issues={issues}. "
                     "답변 품질이 기준에 못 미칩니다. 위 문제를 보완해 analyze를 다시 호출하고 "
                     "더 자세한 detail과 행동 지침, 상담 권유 문구를 포함하세요."
+                    f"{item_guidance}"
                 )
                 continue
 
@@ -243,20 +285,53 @@ def evaluate(result: dict, question: str) -> tuple:
     if items:
         doctor_detail = " ".join(item.get("doctorOpinion", {}).get("detail", "") for item in items)
         pharmacist_detail = " ".join(item.get("pharmacistOpinion", {}).get("detail", "") for item in items)
+        if any(
+            _sentence_count(item.get("doctorOpinion", {}).get("detail", "")) < 2
+            or _sentence_count(item.get("pharmacistOpinion", {}).get("detail", "")) < 2
+            for item in items
+        ):
+            score -= 40
+            issues.append("각 항목의 detail은 2문장 이상으로 작성해야 합니다.")
+        if any(
+            not any(
+                keyword
+                in (
+                    f"{item.get('doctorOpinion', {}).get('detail', '')} "
+                    f"{item.get('pharmacistOpinion', {}).get('detail', '')}"
+                )
+                for keyword in _ACTION_GUIDANCE_KEYWORDS
+            )
+            for item in items
+        ):
+            score -= 40
+            issues.append("각 항목에 복용 시간·간격 등 행동 지침이 포함되어야 합니다.")
+        if any(
+            not any(
+                keyword
+                in (
+                    f"{item.get('doctorOpinion', {}).get('detail', '')} "
+                    f"{item.get('pharmacistOpinion', {}).get('detail', '')}"
+                )
+                for keyword in _CONSULTATION_KEYWORDS
+            )
+            for item in items
+        ):
+            score -= 40
+            issues.append("각 항목에 의사·약사 상담 권유 문구가 포함되어야 합니다.")
     else:
         doctor_detail = result.get("doctorOpinion", {}).get("detail", "")
         pharmacist_detail = result.get("pharmacistOpinion", {}).get("detail", "")
     combined = f"{doctor_detail} {pharmacist_detail}"
 
-    if _sentence_count(doctor_detail) < 2 or _sentence_count(pharmacist_detail) < 2:
+    if not items and (_sentence_count(doctor_detail) < 2 or _sentence_count(pharmacist_detail) < 2):
         score -= 20
         issues.append("detail은 2문장 이상으로 작성해야 합니다.")
 
-    if not any(keyword in combined for keyword in _ACTION_GUIDANCE_KEYWORDS):
+    if not items and not any(keyword in combined for keyword in _ACTION_GUIDANCE_KEYWORDS):
         score -= 20
         issues.append("복용 시간·간격 등 행동 지침이 포함되어야 합니다.")
 
-    if not any(keyword in combined for keyword in _CONSULTATION_KEYWORDS):
+    if not items and not any(keyword in combined for keyword in _CONSULTATION_KEYWORDS):
         score -= 20
         issues.append("의사·약사 상담 권유 문구가 포함되어야 합니다.")
 

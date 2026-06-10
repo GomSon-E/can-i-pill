@@ -97,6 +97,17 @@ def test_tool_declarations_define_all_allowed_agent_actions():
         assert declaration.parameters_json_schema["type"] == "object"
 
 
+def test_tool_function_dispatch_names_match_policy_and_declarations():
+    module = importlib.import_module("app.harness.harness")
+
+    allowed_actions = set(module.HARNESS_POLICY["allowed_actions"])
+    declaration_names = {declaration.name for declaration in module.TOOL_DECLARATIONS}
+    function_names = set(module._TOOL_FUNCTIONS)
+
+    assert function_names == allowed_actions
+    assert declaration_names == allowed_actions
+
+
 def test_call_with_tools_accepts_allowed_action_from_model():
     module = importlib.import_module("app.harness.harness")
     client = _FakeClient(action_name="validate_query")
@@ -111,6 +122,26 @@ def test_call_with_tools_accepts_allowed_action_from_model():
     assert action_args == {"ok": True}
 
 
+def test_call_with_tools_returns_error_when_model_does_not_call_function():
+    module = importlib.import_module("app.harness.harness")
+
+    class _NoFunctionCallModels:
+        def generate_content(self, **kwargs):
+            return type("FakeResponse", (), {"function_calls": []})()
+
+    client = type("FakeClient", (), {"models": _NoFunctionCallModels()})()
+
+    action_name, action_args = module._call_with_tools(
+        ["choose an action"],
+        module.TOOL_DECLARATIONS,
+        client=client,
+    )
+
+    assert action_name == "error"
+    assert action_args["type"] == "error"
+    assert "도구 호출" in action_args["message"]
+
+
 def test_execute_tool_rejects_action_outside_allowed_actions():
     module = importlib.import_module("app.harness.harness")
 
@@ -118,16 +149,44 @@ def test_execute_tool_rejects_action_outside_allowed_actions():
         module.execute_tool("delete_everything", {})
 
 
+def test_run_agent_returns_error_for_action_outside_allowed_actions(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "delete_everything", {}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "error"
+    assert "허용되지 않은" in result["message"]
+    assert result["trace"][0]["action"] == "delete_everything"
+
+
+def test_run_agent_normalizes_error_action_without_type(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "error", {"message": "실패"}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "error"
+    assert result["message"] == "실패"
+    assert result["trace"][0]["observation"] == {"type": "error", "message": "실패"}
+
+
 def test_execute_tool_calls_matching_tool_function(monkeypatch):
     module = importlib.import_module("app.harness.harness")
-    tools = importlib.import_module("app.harness.tools")
 
     def fake_ask_clarification(reason):
         assert reason == "불명확함"
         return {"clarification_prompt": "불명확함"}
 
-    monkeypatch.setattr(tools, "ask_clarification", fake_ask_clarification)
-    monkeypatch.setattr(module, "ask_clarification", fake_ask_clarification)
+    monkeypatch.setitem(module._TOOL_FUNCTIONS, "ask_clarification", fake_ask_clarification)
 
     result = module.execute_tool("ask_clarification", {"reason": "불명확함"})
 
@@ -462,6 +521,174 @@ def test_evaluate_sufficient_detail_with_guidance_and_consultation_scores_at_lea
     assert issues == []
 
 
+def test_evaluate_multi_item_fails_when_any_item_detail_is_too_short():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "items": [
+            {
+                "name": "홍삼",
+                "level": "caution",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+            {
+                "name": "비타민C",
+                "level": "safe",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "괜찮습니다.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "복용 시간은 평소처럼 유지하세요. 불편하면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+        ],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert passed is False
+    assert score < 70
+    assert issues
+
+
+def test_evaluate_multi_item_fails_when_any_item_lacks_action_guidance():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "items": [
+            {
+                "name": "홍삼",
+                "level": "caution",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+            {
+                "name": "비타민C",
+                "level": "safe",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "현재 드시는 약을 약사에게 알려주세요. 몸 상태가 달라지면 상담을 받으세요.",
+                },
+                "alternatives": [],
+            },
+        ],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert passed is False
+    assert score < 70
+    assert issues
+
+
+def test_evaluate_multi_item_fails_when_any_item_lacks_consultation_guidance():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "items": [
+            {
+                "name": "홍삼",
+                "level": "caution",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+            {
+                "name": "비타민C",
+                "level": "safe",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 잠시 중단하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "식후에 드시고 하루 권장량을 넘기지 마세요. 몸 상태가 달라지면 확인이 필요합니다.",
+                },
+                "alternatives": [],
+            },
+        ],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert passed is False
+    assert score < 70
+    assert issues
+
+
+def test_evaluate_multi_item_passes_when_all_items_meet_quality_bar():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "items": [
+            {
+                "name": "홍삼",
+                "level": "caution",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+            {
+                "name": "비타민C",
+                "level": "safe",
+                "doctorOpinion": {
+                    "summary": "요약",
+                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 의사와 상담하세요.",
+                },
+                "pharmacistOpinion": {
+                    "summary": "요약",
+                    "detail": "식후 복용 시간에 맞춰 드시고 하루 권장량을 넘기지 마세요. 궁금하면 약사와 상담하세요.",
+                },
+                "alternatives": [],
+            },
+        ],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert passed is True
+    assert score >= 70
+    assert issues == []
+
+
 def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
@@ -758,3 +985,215 @@ def test_run_agent_returns_items_and_aggregated_level_for_multi_item_question(mo
     assert result["type"] == "analysis"
     assert result["items"] == item_results
     assert result["level"] == "danger"
+
+
+def test_run_agent_returns_error_when_sub_agents_fail(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    def fake_run_sub_agents_sync(items, context):
+        raise RuntimeError("sub-agent failed")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_run_sub_agents_sync", fake_run_sub_agents_sync)
+
+    result = module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert result["type"] == "error"
+    assert "sub-agent failed" in result["message"]
+    assert result["trace"][-1]["action"] == "analyze"
+
+
+def test_run_agent_reuses_validated_items_when_multi_item_retry_starts_with_analyze(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    short_items = [
+        {
+            "name": "홍삼",
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "alternatives": [],
+        },
+        {
+            "name": "비타민C",
+            "level": "safe",
+            "doctorOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "alternatives": [],
+        },
+    ]
+    long_items = [
+        {
+            "name": "홍삼",
+            "level": "caution",
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 불편하면 의사와 상담하세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가로 복용 중인 약이 있으면 약사와 상담하세요.",
+            },
+            "alternatives": [],
+        },
+        {
+            "name": "비타민C",
+            "level": "danger",
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "출혈 위험이 커질 수 있어 주의가 필요합니다. 멍이나 출혈이 있으면 의사와 상담하세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "임의로 함께 복용하지 말고 복용 간격을 확인하세요. 약사에게 현재 복용 약을 알려주세요.",
+            },
+            "alternatives": [],
+        },
+    ]
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {}}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {}}),
+    ])
+    sub_agent_results = iter([short_items, long_items])
+    sub_agent_calls = []
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {
+                "is_relevant": True,
+                "is_clear": True,
+                "items": ["홍삼", "비타민C"],
+                "missing_info": [],
+            }
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected direct tool call: {name}")
+
+    def fake_run_sub_agents_sync(items, context):
+        sub_agent_calls.append(list(items))
+        item_results = next(sub_agent_results)
+        return item_results
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_run_sub_agents_sync", fake_run_sub_agents_sync)
+
+    result = module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert sub_agent_calls == [["홍삼", "비타민C"], ["홍삼", "비타민C"]]
+    assert result["type"] == "analysis"
+    assert result["items"] == long_items
+    assert result["level"] == "danger"
+
+
+def test_run_agent_self_evaluate_retry_message_includes_multi_item_names(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    short_items = [
+        {
+            "name": "홍삼",
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "alternatives": [],
+        },
+        {
+            "name": "비타민C",
+            "level": "safe",
+            "doctorOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "짧습니다."},
+            "alternatives": [],
+        },
+    ]
+    long_items = [
+        {
+            "name": "홍삼",
+            "level": "caution",
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 불편하면 의사와 상담하세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가로 복용 중인 약이 있으면 약사와 상담하세요.",
+            },
+            "alternatives": [],
+        },
+        {
+            "name": "비타민C",
+            "level": "safe",
+            "doctorOpinion": {
+                "summary": "요약",
+                "detail": "일반적인 양에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 의사와 상담하세요.",
+            },
+            "pharmacistOpinion": {
+                "summary": "요약",
+                "detail": "기존 약 복용 시간과 간격을 확인하세요. 궁금한 점은 약사와 상담하세요.",
+            },
+            "alternatives": [],
+        },
+    ]
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {}}),
+        ("analyze", {"question": "홍삼이랑 비타민C 같이 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {}}),
+    ])
+    sub_agent_results = iter([short_items, long_items])
+    retry_message = {}
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        action = next(planned_actions)
+        if action[0] == "analyze" and any("[Self-Evaluate]" in message for message in messages):
+            retry_message["text"] = messages[-1]
+        return action
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected direct tool call: {name}")
+
+    def fake_run_sub_agents_sync(items, context):
+        return next(sub_agent_results)
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_run_sub_agents_sync", fake_run_sub_agents_sync)
+
+    module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
+
+    assert "홍삼" in retry_message["text"]
+    assert "비타민C" in retry_message["text"]

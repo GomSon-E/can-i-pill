@@ -82,3 +82,15 @@ def test_post_analyze_returns_analysis_for_clear_question(monkeypatch):
     assert data["type"] == "analysis"
     assert data["level"] == "safe"
     assert "doctorOpinion" in data
+
+
+def test_post_analyze_keeps_error_type_from_harness(monkeypatch):
+    def fake_run_agent(question, extra_context=""):
+        return {"type": "error", "message": "실패", "trace": []}
+
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
+
+    data = asyncio.run(ai.analyze(ai.AnalyzeRequest(question="홍삼 먹어도 되나요?")))
+
+    assert data["type"] == "error"
+    assert data["message"] == "실패"
