@@ -1,5 +1,6 @@
 import importlib
 
+import pytest
 from google.genai import types
 
 
@@ -107,3 +108,26 @@ def test_call_with_tools_accepts_allowed_action_from_model():
 
     assert action_name in module.HARNESS_POLICY["allowed_actions"]
     assert action_args == {"ok": True}
+
+
+def test_execute_tool_rejects_action_outside_allowed_actions():
+    module = importlib.import_module("app.harness.harness")
+
+    with pytest.raises(PermissionError):
+        module.execute_tool("delete_everything", {})
+
+
+def test_execute_tool_calls_matching_tool_function(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+    tools = importlib.import_module("app.harness.tools")
+
+    def fake_ask_clarification(reason):
+        assert reason == "불명확함"
+        return {"clarification_prompt": "불명확함"}
+
+    monkeypatch.setattr(tools, "ask_clarification", fake_ask_clarification)
+    monkeypatch.setattr(module, "ask_clarification", fake_ask_clarification)
+
+    result = module.execute_tool("ask_clarification", {"reason": "불명확함"})
+
+    assert result == {"clarification_prompt": "불명확함"}
