@@ -326,105 +326,116 @@
 
 ---
 
-## E. AI Queue Scheduling, Metrics, Dashboard
+## AI 서버 동시성 제어 및 모니터링
 
-> 서버 아키텍처 설계 문서의 "AI 동시 워커 20개" 목표를 실제 구현으로 연결한다.
-> 목표: AI 요청을 큐로 제어하고, 장애상황/status code/throughput/latency를 수집해 간단한 대시보드에서 확인한다.
+> 서버 아키텍처 설계 문서(C.2, C.3) 기준: AI 서버는 동시 워커 20개로 설계, 메트릭 버퍼로 Gemini 응답 시간·에러율 수집.
 
-### E-1. Queue Scheduling 요구사항 확정
+### E-1. 동시 워커 20개 Queue Scheduling
 
-- [ ] AI 작업 대상 엔드포인트 범위 결정 (`/analyze` 우선, `/ocr`, `/label` 포함 여부 결정)
-- [ ] 사용자-facing 처리 방식 결정: 기존 동기 응답 유지 vs `job_id` 기반 비동기 polling
-- [ ] 목표 동시 실행 수를 설정값으로 정의 (`AI_MAX_CONCURRENT_JOBS=20`)
-- [ ] 큐 대기 최대 개수 설정값 정의 (`AI_QUEUE_MAX_SIZE`)
-- [ ] 큐 대기 timeout / 작업 실행 timeout 정책 정의
-- [ ] 큐 포화 시 반환할 status code와 응답 body 정의 (`429` 또는 `503`)
-- [ ] 작업 실패/timeout/취소 상태 모델 정의 (`queued | running | succeeded | failed | timeout | cancelled`)
-- [ ] TDD 기준 API 계약을 문서화
+- [x] `ai_server/tests/test_concurrency.py` 작성 — `ai_server/app/concurrency.py`에 `MAX_CONCURRENT_GEMINI_CALLS = 20`, `GEMINI_SEMAPHORE = asyncio.Semaphore(20)` 존재 검증
+- [x] `ai_server/app/concurrency.py` 생성 — 위 상수/세마포어 정의
+- [x] `ai_server/tests/test_concurrency.py`에 동시성 제한 테스트 추가 — 25개의 가짜 비동기 작업(`asyncio.sleep`)을 세마포어로 감싸 동시 실행 시, 동시 실행 개수가 20을 절대 넘지 않음을 카운터로 검증
+- [x] `ai_server/app/routers/ai.py` 수정 — `/ocr`, `/label`, `/analyze` 각각에서 Gemini 호출 구간을 `async with GEMINI_SEMAPHORE:`로 감쌈
+  - `/analyze`는 현재 `def`(동기)이므로 `async def`로 변경하고, 블로킹 호출인 `_client.models.generate_content(...)`는 `await asyncio.to_thread(...)`로 실행
+- [x] `ai_server/tests/test_ai_router.py`, `test_mock_ai.py` 등 기존 테스트가 세마포어 적용 후에도 통과하는지 확인 (회귀 테스트)
 
-### E-2. AI Job 모델 및 저장소
+### E-2. Gemini API 장애/처리량/지연시간 메트릭 수집 및 대시보드
 
-- [ ] `ai_server/app/job_store.py` 생성 — 인메모리 job 저장소 구현
-- [ ] `AIJob` 모델 정의: `id`, `kind`, `status`, `created_at`, `started_at`, `finished_at`, `queue_wait_ms`, `run_ms`, `error`, `result`
-- [ ] job id 생성 테스트 작성
-- [ ] job 상태 전이 테스트 작성 (`queued → running → succeeded/failed/timeout`)
-- [ ] 오래된 job 정리 TTL 설정값 추가 (`AI_JOB_TTL_SECONDS`)
-- [ ] TTL 만료 job 정리 테스트 작성
-- [ ] 서버 재시작 시 job 유실 가능성을 PoC 제약으로 문서화
+- [x] `ai_server/tests/test_metrics.py` 작성 — `ai_server/app/metrics.py`의 `record_metric(endpoint, status_code, latency_ms, success)`가 호출 시 인메모리 버퍼에 기록되는지 검증
+- [x] `ai_server/app/metrics.py` 생성 — 인메모리 리스트 기반 메트릭 버퍼(최근 N건 캡, 예: 1000건)와 `record_metric()` 구현
+- [x] `ai_server/tests/test_metrics.py`에 집계 테스트 추가 — `get_metrics_summary()`가 엔드포인트별 총 요청 수, 성공/실패 수, status_code별 에러 분포, 평균/최소/최대 지연시간(ms), 최근 1분간 처리량(req/min)을 반환하는지 검증
+- [x] `ai_server/app/metrics.py`에 `get_metrics_summary()` 구현
+- [x] `ai_server/app/routers/ai.py` 수정 — `/ocr`, `/label`, `/analyze`에서 Gemini 호출 시작/종료 시각을 측정해 `record_metric()` 호출
+  - 성공 시 `status_code=200, success=True`
+  - Gemini 호출 예외 발생 시, 예외에서 status_code 추출 가능하면 사용(예: `google.genai.errors.APIError.code`), 없으면 `500`으로 기록 후 예외 재발생
+- [x] `ai_server/tests/test_metrics.py`에 라우터 통합 테스트 추가 — Gemini 클라이언트를 mock하여 `/analyze` 성공/실패 호출 후 메트릭 버퍼에 기록되는지 검증
+- [x] `ai_server/tests/test_metrics_router.py` 작성 — `GET /metrics`가 `get_metrics_summary()` 결과를 JSON으로 반환하는지 검증 (TestClient)
+- [x] `ai_server/app/routers/metrics.py` 생성 — `GET /metrics` 라우터 구현
+- [x] `ai_server/app/main.py` 수정 — `metrics.router` 등록
+- [x] `ai_server/tests/test_dashboard.py` 작성 — `GET /dashboard`가 200과 `text/html` 응답을 반환하는지 검증 (TestClient)
+- [x] `ai_server/app/static/dashboard.html` 생성 — 외부 라이브러리 없는 vanilla HTML+JS 페이지. 5초 주기로 `/metrics`를 fetch해 엔드포인트별 요청 수/성공·실패 수/status_code별 에러 분포/평균·최소·최대 지연시간/최근 1분 처리량을 표 + 퍼센트 너비 div 막대로 시각화
+- [x] `ai_server/app/routers/metrics.py` 또는 `main.py` 수정 — `GET /dashboard`가 `dashboard.html`을 `HTMLResponse`로 반환하도록 라우트 추가 (StaticFiles 마운트 대신 단일 라우트로 단순화)
+- [x] 로컬 통합 확인: `ai_server` 8001 단독 실행 후 `/analyze` 몇 차례 호출(mock 또는 실제 Gemini) → `http://localhost:8001/dashboard`에서 메트릭 반영 확인
 
-### E-3. Queue Scheduler 구현
+---
 
-- [ ] `ai_server/app/scheduler.py` 생성 — `asyncio.Queue` + `asyncio.Semaphore` 기반 scheduler 구현
-- [ ] 동시에 실행되는 job 수가 `AI_MAX_CONCURRENT_JOBS`를 넘지 않는 테스트 작성
-- [ ] 큐 순서가 FIFO로 유지되는 테스트 작성
-- [ ] 큐 포화 시 새 job이 거절되는 테스트 작성
-- [ ] job timeout 발생 시 `timeout` 상태로 기록되는 테스트 작성
-- [ ] scheduler 시작/종료 lifecycle을 FastAPI startup/shutdown에 연결
-- [ ] `/health` 응답에 scheduler 상태 포함 (`queue_size`, `running_jobs`, `max_concurrent_jobs`)
+## 하네스를 위해 AI가 해야하는 것
 
-### E-4. AI API Queue 적용
+> `ai_server/app/routers/ai.py`의 단발성 Gemini 호출을 Harness 루프 기반 Agentic AI로 전환.
+> Agent가 validate → gather_context → analyze → finish 순서를 자율 결정,
+> Harness가 allowed_actions / max_steps / completion_conditions로 행동 범위 제어.
 
-- [ ] `POST /analyze/jobs` 추가 — 분석 job 생성 후 `202 Accepted` + `job_id` 반환
-- [ ] `GET /analyze/jobs/{job_id}` 추가 — job 상태/result 조회
-- [ ] `POST /analyze` 기존 동기 API는 내부적으로 queue를 사용하도록 변경
-- [ ] 동기 `/analyze`가 queue wait + run timeout을 넘으면 명확한 오류 응답 반환
-- [ ] `/ocr/jobs`, `/label/jobs` 필요 여부 결정 후 동일 패턴 적용
-- [ ] 백엔드 프록시에 job API 전달 테스트 추가
-- [ ] 프론트엔드 기존 플로우가 동기 `/analyze`로 계속 동작하는 회귀 테스트 작성
+### H-1. 파일 구조 생성
 
-### E-5. Status Code / 장애상황 표준화
+- [ ] `ai_server/app/harness/__init__.py` 생성
+- [ ] `ai_server/app/harness/tools.py` 생성 (함수 스텁)
+- [ ] `ai_server/app/harness/harness.py` 생성 (함수 스텁)
+- [ ] `ai_server/tests/test_harness_tools.py` 생성
+- [ ] `ai_server/tests/test_harness_loop.py` 생성
 
-- [ ] AI 서버 공통 오류 응답 스키마 정의: `{ error: { code, message, retryable, requestId } }`
-- [ ] Gemini API timeout → `504 Gateway Timeout` 매핑 테스트
-- [ ] Gemini API rate limit → `429 Too Many Requests` 매핑 테스트
-- [ ] Gemini API 5xx/일시 장애 → `502 Bad Gateway` 또는 `503 Service Unavailable` 매핑 테스트
-- [ ] JSON schema 파싱 실패/재시도 소진 → `502 Bad Gateway` 매핑 테스트
-- [ ] 큐 포화 → `429` 또는 `503` 매핑 테스트
-- [ ] 잘못된 사용자 입력 → `422` 유지 테스트
-- [ ] 백엔드 프록시가 AI 서버 status code/body를 보존하는 테스트 작성
+### H-2. Gemini function calling 연동 확인
 
-### E-6. Metrics 수집
+- [ ] `tools=` 파라미터로 단순 tool 1개 호출 성공하는 smoke 테스트 작성 및 통과
+- [ ] 6개 tool의 Gemini function declaration JSON Schema 정의
+  - `validate_query` / `gather_context` / `ask_clarification` / `analyze` / `reject` / `finish`
+- [ ] `_call_with_tools(messages, tool_declarations) → (action_name, action_args)` 헬퍼 작성
 
-- [ ] `ai_server/app/metrics.py` 생성 — 인메모리 metrics registry 구현
-- [ ] 요청 counter 수집: endpoint, method, status_code, error_code
-- [ ] job counter 수집: kind, status
-- [ ] queue gauge 수집: `queue_size`, `running_jobs`, `max_concurrent_jobs`
-- [ ] latency histogram 또는 bucket 수집: queue wait, AI run time, total request time
-- [ ] throughput 계산용 rolling window 구현 (`requests_per_minute`, `jobs_per_minute`)
-- [ ] p50/p95/p99 latency 계산 테스트 작성
-- [ ] metrics 수집이 요청 실패 상황에서도 누락되지 않는 테스트 작성
-- [ ] metrics 메모리 상한/rolling window 보관 기간 설정값 추가
+### H-3. Tools 구현 (tools.py)
 
-### E-7. Metrics API
+- [ ] `validate_query(question: str) → dict` 구현
+  - Gemini 호출해 `{ is_relevant, is_clear, items, missing_info }` 반환
+  - 테스트: `"오늘 날씨 어때?"` → `is_relevant: false`
+  - 테스트: `"이거 먹어도 돼요?"` → `is_clear: false`
+  - 테스트: `"홍삼 먹어도 되나요?"` → `is_relevant: true, is_clear: true`
+- [ ] `gather_context(user_id: str) → dict` 구현
+  - Supabase에서 drugs, supplements, health_conditions 조회
+  - 테스트: 빈 user_id → 빈 배열 반환 / 유효 user_id → 프로필 반환
+- [ ] `ask_clarification(reason: str) → dict` 구현 — `{ clarification_prompt: str }` 반환
+- [ ] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
+  - 테스트: level이 항상 `safe | caution | danger` 중 하나
+- [ ] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
+- [ ] `finish(result: dict) → dict` 구현 — `{ type: "analysis", **result }` 반환
 
-- [ ] `GET /metrics/summary` 추가 — dashboard용 JSON 반환
-- [ ] `GET /metrics/recent` 추가 — 최근 N분 시계열 데이터 반환
-- [ ] `GET /metrics/errors` 추가 — 최근 오류 목록/status code 분포 반환
-- [ ] metrics API 응답 스키마 테스트 작성
-- [ ] 빈 데이터 상태에서도 200 + 기본값 반환 테스트 작성
-- [ ] metrics API에 관리자용 간단한 보호 장치 적용 여부 결정 (`METRICS_TOKEN`)
-- [ ] 백엔드 프록시에서 `/ai-metrics/*` 또는 관리자 API 경로로 metrics 전달
+### H-4. Harness 루프 구현 (harness.py)
 
-### E-8. Dashboard 개발
+- [ ] `HARNESS_POLICY` 상수 정의 (goal, allowed_actions, max_steps: 5, completion_conditions)
+- [ ] `execute_tool(name, args, user_id) → dict` 구현
+  - 테스트: allowed_actions 외 이름 → `PermissionError`
+- [ ] `run_agent(question: str, user_id: str) → dict` 구현
+  - messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
+  - 테스트: 무관한 질문 → reject 2 step 내 종료
+  - 테스트: 정상 질문 → finish → analysis 결과 반환
+  - 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
+- [ ] trace 기록 — 각 step의 action/args/observation 리스트 누적
 
-- [ ] 프론트엔드 관리자/운영용 dashboard 라우트 추가 (`/admin/ai-dashboard`)
-- [ ] summary 카드 표시: queue size, running jobs, throughput, p95 latency, error rate
-- [ ] status code 분포 표시
-- [ ] latency 추이 차트 표시 (최근 N분)
-- [ ] queue depth / running jobs 추이 표시
-- [ ] 최근 오류 리스트 표시: 시간, endpoint, status code, error code, message
-- [ ] 자동 새로고침 interval 구현 (`5s` 기본)
-- [ ] 로딩/빈 상태/metrics API 실패 상태 UI 구현
-- [ ] dashboard 컴포넌트 테스트 작성
-- [ ] Playwright 또는 RTL로 핵심 렌더링 확인
+### H-5. Harness.evaluate() 품질 검증 루프
 
-### E-9. 부하 테스트 및 검증
+- [ ] `evaluate(result, question) → (bool, int, list)` 구현
+  - detail 2문장 이상 여부 (-20점 미달 시)
+  - 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
+  - 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
+  - score >= 70 → True
+  - 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
+- [ ] run_agent에 self-evaluate 재시도 통합
+  - evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
+  - 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
 
-- [ ] 로컬 fake Gemini 응답 지연 서버 또는 monkeypatch 기반 부하 테스트 작성
-- [ ] 50개 동시 `/analyze` 요청 시 동시 실행이 20개 이하인지 검증
-- [ ] 50개 동시 요청이 3개 batch로 처리되는지 검증
-- [ ] queue wait / run latency / total latency metrics가 기대 범위로 기록되는지 검증
-- [ ] 큐 포화 시 오류율과 status code가 dashboard에 표시되는지 검증
-- [ ] `backend` 전체 테스트 통과 확인
-- [ ] `ai_server` 전체 테스트 통과 확인
-- [ ] `docker-compose up` 환경에서 queue + metrics + dashboard smoke test 수행
+### H-6. /analyze 엔드포인트 통합
+
+- [ ] `AnalyzeRequest` 스키마 변경: `{ question: str, user_id: str }` (context 제거)
+- [ ] `ai.py`의 `analyze()` 핸들러에서 `harness.run_agent(question, user_id)` 호출로 교체
+- [ ] 응답 스키마에 `type` 필드 포함: `"analysis" | "clarification" | "rejection" | "error"`
+- [ ] 통합 테스트: 무관한 질문 → `{ type: "rejection" }` 반환
+- [ ] 통합 테스트: 불명확한 질문 → `{ type: "clarification", clarification_prompt }` 반환
+- [ ] 통합 테스트: 정상 질문 → `{ type: "analysis", level, doctorOpinion, ... }` 반환
+
+### H-7. 프론트엔드 대응
+
+- [ ] store에 `userId: string` 상태 추가 — POST /user 응답에서 저장
+- [ ] `/analyze` 요청 body 변경: `{ context }` → `{ user_id }`
+- [ ] `analyzeStore`에 `responseType: "analysis" | "clarification" | "rejection"` 필드 추가
+- [ ] `Main04.tsx`: 응답 type 확인 후 분기
+  - `"clarification"` → clarification_prompt 표시 후 Main02 복귀
+  - `"rejection"` → message 토스트 표시 후 Main02 복귀
+  - `"analysis"` → 기존대로 Main05 이동
+- [ ] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시
