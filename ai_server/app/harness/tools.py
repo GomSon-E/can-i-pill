@@ -123,3 +123,7 @@ def analyze(question: str, context: str) -> dict:
 
 def reject(reason: str) -> dict:
     return {"type": "rejection", "message": reason}
+
+
+def finish(result: dict) -> dict:
+    return {"type": "analysis", **result}
