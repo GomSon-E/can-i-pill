@@ -145,3 +145,22 @@ def test_reject_returns_rejection_type_with_message():
         "type": "rejection",
         "message": "이 서비스의 분석 범위를 벗어난 질문입니다",
     }
+
+
+def test_finish_returns_analysis_type_with_result_fields():
+    module = importlib.import_module("app.harness.tools")
+
+    result = module.finish({
+        "level": "caution",
+        "doctorOpinion": {"summary": "요약", "detail": "상세"},
+        "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+        "alternatives": [],
+    })
+
+    assert result == {
+        "type": "analysis",
+        "level": "caution",
+        "doctorOpinion": {"summary": "요약", "detail": "상세"},
+        "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+        "alternatives": [],
+    }
