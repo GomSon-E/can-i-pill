@@ -5,6 +5,34 @@ import pytest
 from google.genai import types
 
 
+def _passing_judge(question, candidate):
+    return {
+        "scores": {"factuality": 5, "readability": 5, "usefulness": 5, "schema": 5},
+        "rationale": "근거",
+        "jargon_terms_found": [],
+    }
+
+
+def _fail_then_pass_judge():
+    results = iter([
+        {
+            "scores": {"factuality": 3, "readability": 3, "usefulness": 3, "schema": 3},
+            "rationale": "근거",
+            "jargon_terms_found": [],
+        },
+        {
+            "scores": {"factuality": 5, "readability": 5, "usefulness": 5, "schema": 5},
+            "rationale": "근거",
+            "jargon_terms_found": [],
+        },
+    ])
+
+    def fake_generate_judge(question, candidate):
+        return next(results)
+
+    return fake_generate_judge
+
+
 def test_harness_loop_module_is_importable():
     module = importlib.import_module("app.harness.harness")
 
@@ -385,6 +413,7 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_generate_judge", _passing_judge)
 
     result = module.run_agent("홍삼 먹어도 되나요?")
 
@@ -472,6 +501,7 @@ def test_run_agent_backfills_finish_result_with_missing_analyze_fields(monkeypat
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_generate_judge", _passing_judge)
 
     result = module.run_agent("홍삼 먹어도 되나요?")
 
@@ -481,212 +511,107 @@ def test_run_agent_backfills_finish_result_with_missing_analyze_fields(monkeypat
     assert "복용 시간" in result["doctorOpinion"]["detail"]
 
 
-def test_evaluate_short_detail_scores_below_70():
+def _judge_scores(factuality=5, readability=5, usefulness=5, schema=5, jargon_terms_found=None):
+    return {
+        "scores": {
+            "factuality": factuality,
+            "readability": readability,
+            "usefulness": usefulness,
+            "schema": schema,
+        },
+        "rationale": "근거",
+        "jargon_terms_found": jargon_terms_found or [],
+    }
+
+
+def test_evaluate_computes_score_from_judge_average_and_passes_at_70(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
-    result = {
-        "level": "caution",
-        "doctorOpinion": {"summary": "요약", "detail": "괜찮습니다."},
-        "pharmacistOpinion": {"summary": "요약", "detail": "주의하세요."},
-        "alternatives": [],
-    }
+    result = {"level": "caution"}
+
+    def fake_generate_judge(question, candidate):
+        assert question == "홍삼 먹어도 되나요?"
+        assert candidate == result
+        return _judge_scores(4, 4, 4, 4)
+
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
 
     passed, score, issues = module.evaluate(result, "홍삼 먹어도 되나요?")
 
-    assert passed is False
-    assert score < 70
-    assert issues
-
-
-def test_evaluate_sufficient_detail_with_guidance_and_consultation_scores_at_least_70():
-    module = importlib.import_module("app.harness.harness")
-
-    result = {
-        "level": "caution",
-        "doctorOpinion": {
-            "summary": "요약",
-            "detail": "혈압약과 함께 먹으면 흡수가 줄어들 수 있습니다. 복용 시간을 2시간 이상 띄우는 것이 좋습니다.",
-        },
-        "pharmacistOpinion": {
-            "summary": "요약",
-            "detail": "약 복용 후 2시간 간격을 두고 섭취하세요. 추가로 궁금한 점은 의사나 약사와 상담하세요.",
-        },
-        "alternatives": [],
-    }
-
-    passed, score, issues = module.evaluate(result, "홍삼 먹어도 되나요?")
-
+    assert score == 80
     assert passed is True
-    assert score >= 70
     assert issues == []
 
 
-def test_evaluate_multi_item_fails_when_any_item_detail_is_too_short():
+def test_evaluate_fails_when_average_score_below_70(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
-    result = {
-        "level": "caution",
-        "items": [
-            {
-                "name": "홍삼",
-                "level": "caution",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-            {
-                "name": "비타민C",
-                "level": "safe",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "괜찮습니다.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "복용 시간은 평소처럼 유지하세요. 불편하면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-        ],
-    }
+    def fake_generate_judge(question, candidate):
+        return _judge_scores(3, 3, 3, 3)
 
-    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
 
+    passed, score, issues = module.evaluate({"level": "caution"}, "홍삼 먹어도 되나요?")
+
+    assert score == 60
     assert passed is False
-    assert score < 70
-    assert issues
 
 
-def test_evaluate_multi_item_fails_when_any_item_lacks_action_guidance():
+def test_evaluate_adds_issue_for_low_scoring_usefulness(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
-    result = {
-        "level": "caution",
-        "items": [
-            {
-                "name": "홍삼",
-                "level": "caution",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-            {
-                "name": "비타민C",
-                "level": "safe",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "현재 드시는 약을 약사에게 알려주세요. 몸 상태가 달라지면 상담을 받으세요.",
-                },
-                "alternatives": [],
-            },
-        ],
-    }
+    def fake_generate_judge(question, candidate):
+        return _judge_scores(usefulness=3)
 
-    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
 
-    assert passed is False
-    assert score < 70
-    assert issues
+    _, _, issues = module.evaluate({"level": "caution"}, "홍삼 먹어도 되나요?")
+
+    assert any("행동 지침" in issue for issue in issues)
 
 
-def test_evaluate_multi_item_fails_when_any_item_lacks_consultation_guidance():
+def test_evaluate_adds_issue_for_jargon_terms_found(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
-    result = {
-        "level": "caution",
-        "items": [
-            {
-                "name": "홍삼",
-                "level": "caution",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-            {
-                "name": "비타민C",
-                "level": "safe",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 잠시 중단하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "식후에 드시고 하루 권장량을 넘기지 마세요. 몸 상태가 달라지면 확인이 필요합니다.",
-                },
-                "alternatives": [],
-            },
-        ],
-    }
+    def fake_generate_judge(question, candidate):
+        return _judge_scores(jargon_terms_found=["항응고제"])
 
-    passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
 
-    assert passed is False
-    assert score < 70
-    assert issues
+    _, _, issues = module.evaluate({"level": "caution"}, "홍삼 먹어도 되나요?")
+
+    assert any("항응고제" in issue for issue in issues)
 
 
-def test_evaluate_multi_item_passes_when_all_items_meet_quality_bar():
+def test_evaluate_fails_open_when_generate_judge_raises(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
-    result = {
-        "level": "caution",
-        "items": [
-            {
-                "name": "홍삼",
-                "level": "caution",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "혈압약과 함께 먹으면 몸의 반응이 달라질 수 있습니다. 복용 전후 변화를 살피고 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "약 복용 시간과 2시간 이상 간격을 두세요. 추가 복용 약이 있으면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-            {
-                "name": "비타민C",
-                "level": "safe",
-                "doctorOpinion": {
-                    "summary": "요약",
-                    "detail": "일반적인 섭취량에서는 큰 문제가 알려져 있지 않습니다. 불편한 증상이 있으면 의사와 상담하세요.",
-                },
-                "pharmacistOpinion": {
-                    "summary": "요약",
-                    "detail": "식후 복용 시간에 맞춰 드시고 하루 권장량을 넘기지 마세요. 궁금하면 약사와 상담하세요.",
-                },
-                "alternatives": [],
-            },
-        ],
-    }
+    def fake_generate_judge(question, candidate):
+        raise RuntimeError("judge unavailable")
 
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
+
+    passed, score, issues = module.evaluate({"level": "caution"}, "홍삼 먹어도 되나요?")
+
+    assert (passed, score, issues) == (True, 100, [])
+
+
+def test_evaluate_passes_multi_item_result_to_generate_judge_in_single_call(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+    calls = []
+
+    def fake_generate_judge(question, candidate):
+        calls.append((question, candidate))
+        return _judge_scores()
+
+    monkeypatch.setattr(module, "_generate_judge", fake_generate_judge)
+
+    result = {"level": "danger", "items": [{"name": "홍삼"}, {"name": "비타민C"}]}
     passed, score, issues = module.evaluate(result, "홍삼이랑 비타민C 같이 먹어도 되나요?")
 
+    assert len(calls) == 1
+    assert calls[0] == ("홍삼이랑 비타민C 같이 먹어도 되나요?", result)
     assert passed is True
-    assert score >= 70
-    assert issues == []
 
 
 def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
@@ -736,6 +661,7 @@ def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_generate_judge", _fail_then_pass_judge())
 
     result = module.run_agent("홍삼 먹어도 되나요?")
 
@@ -851,6 +777,7 @@ def test_run_agent_grants_fresh_max_steps_budget_on_self_evaluate_retry(monkeypa
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_generate_judge", _fail_then_pass_judge())
 
     result = module.run_agent("홍삼 먹어도 되나요?")
 
@@ -979,6 +906,7 @@ def test_run_agent_returns_items_and_aggregated_level_for_multi_item_question(mo
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
     monkeypatch.setattr(module, "run_sub_agents", fake_run_sub_agents)
+    monkeypatch.setattr(module, "_generate_judge", _passing_judge)
 
     result = module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
 
@@ -1104,6 +1032,7 @@ def test_run_agent_reuses_validated_items_when_multi_item_retry_starts_with_anal
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
     monkeypatch.setattr(module, "_run_sub_agents_sync", fake_run_sub_agents_sync)
+    monkeypatch.setattr(module, "_generate_judge", _fail_then_pass_judge())
 
     result = module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
 
@@ -1192,6 +1121,7 @@ def test_run_agent_self_evaluate_retry_message_includes_multi_item_names(monkeyp
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
     monkeypatch.setattr(module, "_run_sub_agents_sync", fake_run_sub_agents_sync)
+    monkeypatch.setattr(module, "_generate_judge", _fail_then_pass_judge())
 
     module.run_agent("홍삼이랑 비타민C 같이 먹어도 되나요?")
 

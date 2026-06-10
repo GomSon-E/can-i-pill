@@ -1,4 +1,5 @@
 import importlib
+import json
 
 import httpx
 
@@ -209,3 +210,30 @@ def test_analyze_item_returns_name_and_level_within_allowed_set(monkeypatch):
 
     assert result["name"] == "홍삼"
     assert result["level"] in ("safe", "caution", "danger")
+
+
+def test_generate_judge_calls_gemini_with_judge_schema_and_returns_parsed_json(monkeypatch):
+    module = importlib.import_module("app.harness.tools")
+    from app.routers import ai
+
+    captured = {}
+    judge_response = {
+        "scores": {"factuality": 5, "readability": 5, "usefulness": 5, "schema": 5},
+        "rationale": "근거",
+        "jargon_terms_found": [],
+    }
+
+    class _FakeResponse:
+        text = json.dumps(judge_response)
+
+    def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        return _FakeResponse()
+
+    monkeypatch.setattr(ai._client.models, "generate_content", fake_generate_content)
+
+    result = module._generate_judge("홍삼 먹어도 되나요?", {"level": "caution"})
+
+    assert captured["model"] == ai.MODEL
+    assert captured["config"].response_schema == module._JUDGE_SCHEMA
+    assert result == judge_response

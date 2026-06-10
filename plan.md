@@ -551,3 +551,33 @@
 - [x] 테스트 정리: `test_execute_tool_calls_matching_tool_function`이 `module.ask_clarification` monkeypatch에 의존하지 않고 `_TOOL_FUNCTIONS["ask_clarification"]` dispatch를 직접 검증하도록 변경한다.
 - [x] 테스트: `_TOOL_FUNCTIONS`에 선언된 모든 action 이름이 `HARNESS_POLICY["allowed_actions"]`에 포함되고, `TOOL_DECLARATIONS` 이름과도 일치한다.
 - [x] 필요 시 `harness.py`: dispatch table 생성 방식 또는 테스트 fixture를 정리하되 런타임 동작은 변경하지 않는다.
+
+### H-11. evaluate()를 LLM-as-Judge 기반으로 전환
+
+> 키워드/문장 수 기반 휴리스틱 채점을 `scripts/interaction_eval.py`의 `JUDGE_SCHEMA`/`JUDGE_RULES`와
+> 동일한 패턴의 LLM-as-judge로 대체한다. `evaluate`는 여전히 agent가 선택하는 tool이 아니며,
+> `run_agent()`가 `finish` 직후 자동으로 호출하는 하네스 내부 품질 게이트로 유지한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+
+#### H-11-1. _generate_judge 추가
+
+- [x] `tools.py`에 `_JUDGE_SCHEMA` 정의 — `factuality`/`readability`/`usefulness`/`schema`(각 1~5 정수), `rationale`(string), `jargon_terms_found`(string[])
+- [x] 테스트: `_generate_judge(question, candidate)`가 `_client.models.generate_content`를 `MODEL`/`_JUDGE_SCHEMA`로 호출하고 `response.text`를 `json.loads`해 반환한다 (mock)
+- [x] `tools.py`에 `_generate_judge(question, candidate) -> dict` 구현 — `_generate_validation`과 동일 패턴, `JUDGE_RULES`를 한국어로 차용한 프롬프트에 `question`+`result`(JSON)만 포함 (시나리오 프로필 없음, level 적정성 평가 제외)
+
+#### H-11-2. evaluate()를 judge 기반으로 재작성
+
+- [x] 테스트: `evaluate()`가 `_generate_judge`를 호출해 4개 항목 평균 × 20을 `score`로 산출하고 `score >= 70`이면 `passed=True`
+- [x] `harness.py`: `evaluate()`를 `_generate_judge` 호출 결과 기반으로 재작성 (`score = round(avg(4개 항목) * 20)`), 시그니처/리턴 타입(`passed, score, issues`)은 유지
+- [x] 테스트: 4개 채점 항목 중 4점 미만인 항목이 있으면 해당 항목에 대한 한국어 안내 문구가 `issues`에 포함된다
+- [x] `harness.py`: 4점 미만 항목별 한국어 issue 문구 매핑 추가
+- [x] 테스트: `jargon_terms_found`가 비어있지 않으면 "다음 의학 용어를 쉬운 말로 풀어 설명하세요: ..." issue가 `issues`에 추가된다
+- [x] `harness.py`: `jargon_terms_found` 기반 issue 추가
+- [x] 테스트: `_generate_judge`가 예외를 던지면 `evaluate()`는 `(True, 100, [])`을 반환한다 (fail-open)
+- [x] `harness.py`: `evaluate()`에 try/except로 fail-open 처리 추가
+- [x] 테스트: 복합 항목(`items`) 결과도 단일 결과와 동일한 코드 경로로 `_generate_judge`에 전달되어 1회 호출로 평가된다 (단일/복합 분기 없음)
+
+#### H-11-3. 기존 키워드 기반 로직 제거 및 테스트 정리
+
+- [x] `harness.py`에서 `_sentence_count`, `_ACTION_GUIDANCE_KEYWORDS`, `_CONSULTATION_KEYWORDS`, `re` import, `evaluate()`의 `items` 유무 분기 처리를 모두 제거한다
+- [x] 기존 `evaluate()` 테스트 6개(`test_evaluate_short_detail_scores_below_70` 등)를 `_generate_judge` monkeypatch 기반으로 재작성한다

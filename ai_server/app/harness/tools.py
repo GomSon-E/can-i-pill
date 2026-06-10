@@ -150,6 +150,59 @@ def analyze_item(item: str, context: str) -> dict:
     return {"name": item, **data}
 
 
+_JUDGE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "scores": {
+            "type": "object",
+            "properties": {
+                "factuality": {"type": "integer"},
+                "readability": {"type": "integer"},
+                "usefulness": {"type": "integer"},
+                "schema": {"type": "integer"},
+            },
+            "required": ["factuality", "readability", "usefulness", "schema"],
+        },
+        "rationale": {"type": "string"},
+        "jargon_terms_found": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["scores", "rationale", "jargon_terms_found"],
+}
+
+
+_JUDGE_RULES = (
+    "당신은 약물 상호작용 안내 답변의 '글 품질'을 평가하는 엄격한 심사위원입니다.\n"
+    "아래 질문과 후보 답변(JSON)을 보고 각 항목을 1~5점(정수)으로 채점하세요.\n"
+    "※ 위험도 등급(level: safe/caution/danger)의 적정성은 평가하지 마세요(별도 정확도 지표로 측정함). "
+    "오직 답변 '본문'의 품질만 보세요.\n"
+    "- factuality(사실성/무환각): 약리 상식에 부합하고 날조된 수치·근거나 사실 오류(환각)가 없는가.\n"
+    "- readability(가독성): 50~60대가 이해할 쉬운 말인가. 번역 안 된 의학용어가 있으면 감점.\n"
+    "- usefulness(유용성): 복용 시간 간격·대안 등 구체적이고 실행 가능한가.\n"
+    "- schema(스키마+면책): 의사·약사 소견/대안 형식이 갖춰지고 면책 취지가 있는가.\n"
+    "jargon_terms_found에는 답변에서 발견된 어려운 의학용어를 나열하세요(없으면 빈 배열).\n"
+    "반드시 JSON으로만 답하세요."
+)
+
+
+def _generate_judge(question: str, candidate: dict) -> dict:
+    from app.routers.ai import MODEL, _client
+
+    prompt = (
+        f"{_JUDGE_RULES}\n\n"
+        f"[질문]\n\"{question}\"\n\n"
+        f"[후보 답변]\n{json.dumps(candidate, ensure_ascii=False)}"
+    )
+    response = _client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=_JUDGE_SCHEMA,
+        ),
+    )
+    return json.loads(response.text)
+
+
 def reject(reason: str) -> dict:
     return {"type": "rejection", "message": reason}
 

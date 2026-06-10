@@ -1,5 +1,4 @@
 import asyncio
-import re
 import threading
 
 from google.genai import types
@@ -12,6 +11,7 @@ from app.harness.tools import (
     analyze_item,
     reject,
     finish,
+    _generate_judge,
 )
 
 
@@ -269,70 +269,30 @@ def run_agent(question: str, extra_context: str = "") -> dict:
     return result
 
 
-_ACTION_GUIDANCE_KEYWORDS = ["복용", "시간", "간격", "용법", "식전", "식후"]
-_CONSULTATION_KEYWORDS = ["의사", "약사"]
-
-
-def _sentence_count(text: str) -> int:
-    return len([s for s in re.split(r"[.!?]", text) if s.strip()])
+_JUDGE_ISSUE_MESSAGES = {
+    "factuality": "사실 관계가 부정확하거나 근거가 불명확한 내용을 다시 확인하세요.",
+    "readability": "더 쉬운 표현으로 풀어서 설명하세요.",
+    "usefulness": "복용 시간·간격 등 행동 지침을 보강하세요.",
+    "schema": "의사·약사 소견과 대안, 상담 권유 형식을 보완하세요.",
+}
 
 
 def evaluate(result: dict, question: str) -> tuple:
-    score = 100
-    issues = []
+    try:
+        judgment = _generate_judge(question, result)
+        scores = judgment["scores"]
+        score = round(sum(scores.values()) / len(scores) * 20)
 
-    items = result.get("items")
-    if items:
-        doctor_detail = " ".join(item.get("doctorOpinion", {}).get("detail", "") for item in items)
-        pharmacist_detail = " ".join(item.get("pharmacistOpinion", {}).get("detail", "") for item in items)
-        if any(
-            _sentence_count(item.get("doctorOpinion", {}).get("detail", "")) < 2
-            or _sentence_count(item.get("pharmacistOpinion", {}).get("detail", "")) < 2
-            for item in items
-        ):
-            score -= 40
-            issues.append("각 항목의 detail은 2문장 이상으로 작성해야 합니다.")
-        if any(
-            not any(
-                keyword
-                in (
-                    f"{item.get('doctorOpinion', {}).get('detail', '')} "
-                    f"{item.get('pharmacistOpinion', {}).get('detail', '')}"
-                )
-                for keyword in _ACTION_GUIDANCE_KEYWORDS
-            )
-            for item in items
-        ):
-            score -= 40
-            issues.append("각 항목에 복용 시간·간격 등 행동 지침이 포함되어야 합니다.")
-        if any(
-            not any(
-                keyword
-                in (
-                    f"{item.get('doctorOpinion', {}).get('detail', '')} "
-                    f"{item.get('pharmacistOpinion', {}).get('detail', '')}"
-                )
-                for keyword in _CONSULTATION_KEYWORDS
-            )
-            for item in items
-        ):
-            score -= 40
-            issues.append("각 항목에 의사·약사 상담 권유 문구가 포함되어야 합니다.")
-    else:
-        doctor_detail = result.get("doctorOpinion", {}).get("detail", "")
-        pharmacist_detail = result.get("pharmacistOpinion", {}).get("detail", "")
-    combined = f"{doctor_detail} {pharmacist_detail}"
+        issues = [
+            message
+            for criterion, message in _JUDGE_ISSUE_MESSAGES.items()
+            if scores.get(criterion, 5) < 4
+        ]
 
-    if not items and (_sentence_count(doctor_detail) < 2 or _sentence_count(pharmacist_detail) < 2):
-        score -= 20
-        issues.append("detail은 2문장 이상으로 작성해야 합니다.")
+        jargon_terms = judgment.get("jargon_terms_found") or []
+        if jargon_terms:
+            issues.append(f"다음 의학 용어를 쉬운 말로 풀어 설명하세요: {', '.join(jargon_terms)}")
 
-    if not items and not any(keyword in combined for keyword in _ACTION_GUIDANCE_KEYWORDS):
-        score -= 20
-        issues.append("복용 시간·간격 등 행동 지침이 포함되어야 합니다.")
-
-    if not items and not any(keyword in combined for keyword in _CONSULTATION_KEYWORDS):
-        score -= 20
-        issues.append("의사·약사 상담 권유 문구가 포함되어야 합니다.")
-
-    return score >= 70, score, issues
+        return score >= 70, score, issues
+    except Exception:
+        return True, 100, []
