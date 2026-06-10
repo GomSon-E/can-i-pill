@@ -478,5 +478,5 @@
 - [x] `finish`/응답 스키마에 `items: [{ name, level, doctorOpinion, pharmacistOpinion, alternatives }, ...]` 필드 추가, 최상위 `level`은 `items` 중 최고 위험도(`danger > caution > safe`)로 산출
 - [x] 테스트: `validate_query`의 `items`가 2개 이상인 질문 → `finish` 결과에 `items` 배열과 최고 위험도 `level` 포함
 - [x] 테스트: 기존 단일 항목 질문은 `items` 없이 기존 응답 스키마 유지 (회귀 방지)
-- [ ] `frontend/src/store/analyzeStore.ts`의 `AnalyzeResult`에 옵셔널 `items?: AnalyzeItem[]` 필드 추가
-- [ ] `Main05.tsx`에서 `items`가 있으면 항목별 결과를 표시하고, 없으면 기존 단일 결과 표시를 유지
+- [x] `frontend/src/store/analyzeStore.ts`의 `AnalyzeResult`에 옵셔널 `items?: AnalyzeItem[]` 필드 추가
+- [x] `Main05.tsx`에서 `items`가 있으면 항목별 결과를 표시하고, 없으면 기존 단일 결과 표시를 유지

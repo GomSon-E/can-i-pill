@@ -411,6 +411,44 @@ describe('S-16: 분석 결과 — 안전', () => {
   })
 })
 
+// ─── S-16b: 분석 결과 — 복합 항목 ──────────────────────────────────────────
+describe('S-16b: 분석 결과 — 복합 항목', () => {
+  beforeEach(async () => {
+    mockNavigate.mockClear()
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.result = {
+      level: 'danger',
+      doctorOpinion: { summary: '', detail: '' },
+      pharmacistOpinion: { summary: '', detail: '' },
+      alternatives: [],
+      items: [
+        {
+          name: '홍삼',
+          level: 'caution',
+          doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+          pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+          alternatives: [],
+        },
+        {
+          name: '비타민C',
+          level: 'danger',
+          doctorOpinion: { summary: '출혈 위험 증가', detail: '출혈 위험이 커질 수 있습니다.' },
+          pharmacistOpinion: { summary: '즉시 상담 필요', detail: '복용 간격을 두고 의사와 상담하세요.' },
+          alternatives: [],
+        },
+      ],
+    }
+  })
+
+  it('items가 있으면 항목별 이름과 의견 요약을 표시', () => {
+    renderPage('/main-05')
+    expect(screen.getByText('홍삼')).toBeInTheDocument()
+    expect(screen.getByText('비타민C')).toBeInTheDocument()
+    expect(screen.getByText(/혈압약과 상호작용 가능성/)).toBeInTheDocument()
+    expect(screen.getByText(/출혈 위험 증가/)).toBeInTheDocument()
+  })
+})
+
 // ─── S-17: 분석 결과 — 주의 ────────────────────────────────────────────────
 describe('S-17: 분석 결과 — 주의', () => {
   beforeEach(async () => {
