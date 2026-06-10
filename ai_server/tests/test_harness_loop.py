@@ -131,3 +131,20 @@ def test_execute_tool_calls_matching_tool_function(monkeypatch):
     result = module.execute_tool("ask_clarification", {"reason": "불명확함"})
 
     assert result == {"clarification_prompt": "불명확함"}
+
+
+def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "gather_context", {}
+
+    def fake_execute_tool(name, args):
+        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result == {"type": "error", "message": "분석 한도 초과"}
