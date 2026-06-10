@@ -324,7 +324,107 @@
 - [x] `.dockerignore` 작성 (frontend, backend, ai_server 각각)
 - [x] `docker-compose up` 후 `/analyze` end-to-end 정상 동작 확인
 
+---
 
+## E. AI Queue Scheduling, Metrics, Dashboard
 
+> 서버 아키텍처 설계 문서의 "AI 동시 워커 20개" 목표를 실제 구현으로 연결한다.
+> 목표: AI 요청을 큐로 제어하고, 장애상황/status code/throughput/latency를 수집해 간단한 대시보드에서 확인한다.
 
+### E-1. Queue Scheduling 요구사항 확정
 
+- [ ] AI 작업 대상 엔드포인트 범위 결정 (`/analyze` 우선, `/ocr`, `/label` 포함 여부 결정)
+- [ ] 사용자-facing 처리 방식 결정: 기존 동기 응답 유지 vs `job_id` 기반 비동기 polling
+- [ ] 목표 동시 실행 수를 설정값으로 정의 (`AI_MAX_CONCURRENT_JOBS=20`)
+- [ ] 큐 대기 최대 개수 설정값 정의 (`AI_QUEUE_MAX_SIZE`)
+- [ ] 큐 대기 timeout / 작업 실행 timeout 정책 정의
+- [ ] 큐 포화 시 반환할 status code와 응답 body 정의 (`429` 또는 `503`)
+- [ ] 작업 실패/timeout/취소 상태 모델 정의 (`queued | running | succeeded | failed | timeout | cancelled`)
+- [ ] TDD 기준 API 계약을 문서화
+
+### E-2. AI Job 모델 및 저장소
+
+- [ ] `ai_server/app/job_store.py` 생성 — 인메모리 job 저장소 구현
+- [ ] `AIJob` 모델 정의: `id`, `kind`, `status`, `created_at`, `started_at`, `finished_at`, `queue_wait_ms`, `run_ms`, `error`, `result`
+- [ ] job id 생성 테스트 작성
+- [ ] job 상태 전이 테스트 작성 (`queued → running → succeeded/failed/timeout`)
+- [ ] 오래된 job 정리 TTL 설정값 추가 (`AI_JOB_TTL_SECONDS`)
+- [ ] TTL 만료 job 정리 테스트 작성
+- [ ] 서버 재시작 시 job 유실 가능성을 PoC 제약으로 문서화
+
+### E-3. Queue Scheduler 구현
+
+- [ ] `ai_server/app/scheduler.py` 생성 — `asyncio.Queue` + `asyncio.Semaphore` 기반 scheduler 구현
+- [ ] 동시에 실행되는 job 수가 `AI_MAX_CONCURRENT_JOBS`를 넘지 않는 테스트 작성
+- [ ] 큐 순서가 FIFO로 유지되는 테스트 작성
+- [ ] 큐 포화 시 새 job이 거절되는 테스트 작성
+- [ ] job timeout 발생 시 `timeout` 상태로 기록되는 테스트 작성
+- [ ] scheduler 시작/종료 lifecycle을 FastAPI startup/shutdown에 연결
+- [ ] `/health` 응답에 scheduler 상태 포함 (`queue_size`, `running_jobs`, `max_concurrent_jobs`)
+
+### E-4. AI API Queue 적용
+
+- [ ] `POST /analyze/jobs` 추가 — 분석 job 생성 후 `202 Accepted` + `job_id` 반환
+- [ ] `GET /analyze/jobs/{job_id}` 추가 — job 상태/result 조회
+- [ ] `POST /analyze` 기존 동기 API는 내부적으로 queue를 사용하도록 변경
+- [ ] 동기 `/analyze`가 queue wait + run timeout을 넘으면 명확한 오류 응답 반환
+- [ ] `/ocr/jobs`, `/label/jobs` 필요 여부 결정 후 동일 패턴 적용
+- [ ] 백엔드 프록시에 job API 전달 테스트 추가
+- [ ] 프론트엔드 기존 플로우가 동기 `/analyze`로 계속 동작하는 회귀 테스트 작성
+
+### E-5. Status Code / 장애상황 표준화
+
+- [ ] AI 서버 공통 오류 응답 스키마 정의: `{ error: { code, message, retryable, requestId } }`
+- [ ] Gemini API timeout → `504 Gateway Timeout` 매핑 테스트
+- [ ] Gemini API rate limit → `429 Too Many Requests` 매핑 테스트
+- [ ] Gemini API 5xx/일시 장애 → `502 Bad Gateway` 또는 `503 Service Unavailable` 매핑 테스트
+- [ ] JSON schema 파싱 실패/재시도 소진 → `502 Bad Gateway` 매핑 테스트
+- [ ] 큐 포화 → `429` 또는 `503` 매핑 테스트
+- [ ] 잘못된 사용자 입력 → `422` 유지 테스트
+- [ ] 백엔드 프록시가 AI 서버 status code/body를 보존하는 테스트 작성
+
+### E-6. Metrics 수집
+
+- [ ] `ai_server/app/metrics.py` 생성 — 인메모리 metrics registry 구현
+- [ ] 요청 counter 수집: endpoint, method, status_code, error_code
+- [ ] job counter 수집: kind, status
+- [ ] queue gauge 수집: `queue_size`, `running_jobs`, `max_concurrent_jobs`
+- [ ] latency histogram 또는 bucket 수집: queue wait, AI run time, total request time
+- [ ] throughput 계산용 rolling window 구현 (`requests_per_minute`, `jobs_per_minute`)
+- [ ] p50/p95/p99 latency 계산 테스트 작성
+- [ ] metrics 수집이 요청 실패 상황에서도 누락되지 않는 테스트 작성
+- [ ] metrics 메모리 상한/rolling window 보관 기간 설정값 추가
+
+### E-7. Metrics API
+
+- [ ] `GET /metrics/summary` 추가 — dashboard용 JSON 반환
+- [ ] `GET /metrics/recent` 추가 — 최근 N분 시계열 데이터 반환
+- [ ] `GET /metrics/errors` 추가 — 최근 오류 목록/status code 분포 반환
+- [ ] metrics API 응답 스키마 테스트 작성
+- [ ] 빈 데이터 상태에서도 200 + 기본값 반환 테스트 작성
+- [ ] metrics API에 관리자용 간단한 보호 장치 적용 여부 결정 (`METRICS_TOKEN`)
+- [ ] 백엔드 프록시에서 `/ai-metrics/*` 또는 관리자 API 경로로 metrics 전달
+
+### E-8. Dashboard 개발
+
+- [ ] 프론트엔드 관리자/운영용 dashboard 라우트 추가 (`/admin/ai-dashboard`)
+- [ ] summary 카드 표시: queue size, running jobs, throughput, p95 latency, error rate
+- [ ] status code 분포 표시
+- [ ] latency 추이 차트 표시 (최근 N분)
+- [ ] queue depth / running jobs 추이 표시
+- [ ] 최근 오류 리스트 표시: 시간, endpoint, status code, error code, message
+- [ ] 자동 새로고침 interval 구현 (`5s` 기본)
+- [ ] 로딩/빈 상태/metrics API 실패 상태 UI 구현
+- [ ] dashboard 컴포넌트 테스트 작성
+- [ ] Playwright 또는 RTL로 핵심 렌더링 확인
+
+### E-9. 부하 테스트 및 검증
+
+- [ ] 로컬 fake Gemini 응답 지연 서버 또는 monkeypatch 기반 부하 테스트 작성
+- [ ] 50개 동시 `/analyze` 요청 시 동시 실행이 20개 이하인지 검증
+- [ ] 50개 동시 요청이 3개 batch로 처리되는지 검증
+- [ ] queue wait / run latency / total latency metrics가 기대 범위로 기록되는지 검증
+- [ ] 큐 포화 시 오류율과 status code가 dashboard에 표시되는지 검증
+- [ ] `backend` 전체 테스트 통과 확인
+- [ ] `ai_server` 전체 테스트 통과 확인
+- [ ] `docker-compose up` 환경에서 queue + metrics + dashboard smoke test 수행
