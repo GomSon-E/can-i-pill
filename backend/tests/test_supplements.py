@@ -17,8 +17,10 @@ def test_get_supplements_returns_empty_list():
 
 def test_post_supplement_creates_supplement():
     response = client.post("/supplements", json={
-        "name": "비타민C",
-        "ingredients": ["아스코르브산"]
+        "supplements": [{
+            "name": "비타민C",
+            "ingredients": ["아스코르브산"],
+        }]
     })
     assert response.status_code == 200
     data = response.json()
@@ -31,8 +33,12 @@ def test_post_supplement_creates_supplement():
 
 
 def test_get_supplements_returns_all():
-    client.post("/supplements", json={"name": "비타민C", "ingredients": ["아스코르브산"]})
-    client.post("/supplements", json={"name": "오메가3", "ingredients": ["EPA", "DHA"]})
+    client.post("/supplements", json={
+        "supplements": [
+            {"name": "비타민C", "ingredients": ["아스코르브산"]},
+            {"name": "오메가3", "ingredients": ["EPA", "DHA"]},
+        ]
+    })
     response = client.get("/supplements")
     assert response.status_code == 200
     assert len(response.json()["supplements"]) == 2
@@ -40,8 +46,10 @@ def test_get_supplements_returns_all():
 
 def test_delete_supplement_removes_supplement():
     post_resp = client.post("/supplements", json={
-        "name": "비타민C",
-        "ingredients": ["아스코르브산"]
+        "supplements": [{
+            "name": "비타민C",
+            "ingredients": ["아스코르브산"],
+        }]
     })
     supplement_id = post_resp.json()["supplements"][0]["id"]
 
