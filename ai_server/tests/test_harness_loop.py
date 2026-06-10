@@ -287,3 +287,43 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
     ]
     assert result["trace"][0]["args"] == {"question": "홍삼 먹어도 되나요?"}
     assert result["trace"][0]["observation"]["is_relevant"] is True
+
+
+def test_evaluate_short_detail_scores_below_70():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "doctorOpinion": {"summary": "요약", "detail": "괜찮습니다."},
+        "pharmacistOpinion": {"summary": "요약", "detail": "주의하세요."},
+        "alternatives": [],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼 먹어도 되나요?")
+
+    assert passed is False
+    assert score < 70
+    assert issues
+
+
+def test_evaluate_sufficient_detail_with_guidance_and_consultation_scores_at_least_70():
+    module = importlib.import_module("app.harness.harness")
+
+    result = {
+        "level": "caution",
+        "doctorOpinion": {
+            "summary": "요약",
+            "detail": "혈압약과 함께 먹으면 흡수가 줄어들 수 있습니다. 복용 시간을 2시간 이상 띄우는 것이 좋습니다.",
+        },
+        "pharmacistOpinion": {
+            "summary": "요약",
+            "detail": "약 복용 후 2시간 간격을 두고 섭취하세요. 추가로 궁금한 점은 의사나 약사와 상담하세요.",
+        },
+        "alternatives": [],
+    }
+
+    passed, score, issues = module.evaluate(result, "홍삼 먹어도 되나요?")
+
+    assert passed is True
+    assert score >= 70
+    assert issues == []
