@@ -403,7 +403,7 @@
 - [x] `HARNESS_POLICY`의 completion_conditions에 `finish`, `reject`, `ask_clarification` 포함
 - [x] `execute_tool(name, args) → dict` 구현
 - [x] `execute_tool` 테스트: allowed_actions 외 이름 → `PermissionError`
-- [ ] `run_agent(question: str) → dict` 구현 — messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
+- [x] `run_agent(question: str) → dict` 구현 — messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
 - [ ] `run_agent` 분기 규칙: `is_relevant=false` → `reject`
 - [ ] `run_agent` 분기 규칙: `is_relevant=true, is_clear=false` → `ask_clarification`
 - [ ] `run_agent` 분기 규칙: `is_relevant=false, is_clear=true`처럼 애매한 조합 → 무관 질문으로 보고 `reject`

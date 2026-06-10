@@ -117,3 +117,18 @@ def execute_tool(name, args):
         raise PermissionError(f"Action '{name}' is not allowed")
 
     return _TOOL_FUNCTIONS[name](**args)
+
+
+def run_agent(question: str) -> dict:
+    messages = [f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"]
+
+    for _ in range(HARNESS_POLICY["max_steps"]):
+        action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
+        observation = execute_tool(action_name, action_args)
+        messages.append(f"[Action] {action_name}({action_args})")
+        messages.append(f"[Observation] {observation}")
+
+        if action_name in HARNESS_POLICY["completion_conditions"]:
+            return observation
+
+    return {"type": "error", "message": "분석 한도 초과"}
