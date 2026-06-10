@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>AI 서버 모니터링 대시보드</title>
+<style>
+  body { font-family: sans-serif; margin: 24px; background: #f5f5f5; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
+  th { background: #eee; }
+  .bar-track { background: #eee; border-radius: 4px; overflow: hidden; height: 16px; width: 100%; }
+  .bar-fill { background: #4caf50; height: 100%; }
+  .bar-fill.error { background: #e53935; }
+  h2 { margin-top: 32px; }
+</style>
+</head>
+<body>
+<h1>AI 서버 모니터링 대시보드</h1>
+<div id="endpoints"></div>
+
+<script>
+async function refresh() {
+  const res = await fetch('/metrics');
+  const data = await res.json();
+  const container = document.getElementById('endpoints');
+  container.innerHTML = '';
+
+  for (const [endpoint, stats] of Object.entries(data.endpoints || {})) {
+    const section = document.createElement('div');
+
+    const title = document.createElement('h2');
+    title.textContent = endpoint;
+    section.appendChild(title);
+
+    const table = document.createElement('table');
+    const successRatio = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
+
+    table.innerHTML = `
+      <tr><th>총 요청 수</th><td>${stats.total}</td></tr>
+      <tr><th>성공</th><td>${stats.success}</td></tr>
+      <tr><th>실패</th><td>${stats.failure}</td></tr>
+      <tr><th>평균 지연시간 (ms)</th><td>${stats.avg_latency_ms.toFixed(1)}</td></tr>
+      <tr><th>최소 지연시간 (ms)</th><td>${stats.min_latency_ms.toFixed(1)}</td></tr>
+      <tr><th>최대 지연시간 (ms)</th><td>${stats.max_latency_ms.toFixed(1)}</td></tr>
+      <tr><th>최근 1분 처리량 (req/min)</th><td>${stats.throughput_per_min}</td></tr>
+      <tr>
+        <th>성공률</th>
+        <td>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: ${successRatio}%"></div>
+          </div>
+        </td>
+      </tr>
+    `;
+    section.appendChild(table);
+
+    const errorTitle = document.createElement('h3');
+    errorTitle.textContent = 'status_code별 에러 분포';
+    section.appendChild(errorTitle);
+
+    const errorTable = document.createElement('table');
+    const total = stats.total || 1;
+    let rows = '';
+    for (const [code, count] of Object.entries(stats.status_codes || {})) {
+      const ratio = (count / total) * 100;
+      const isError = code !== '200';
+      rows += `
+        <tr>
+          <th>${code}</th>
+          <td>${count}</td>
+          <td>
+            <div class="bar-track">
+              <div class="bar-fill ${isError ? 'error' : ''}" style="width: ${ratio}%"></div>
+            </div>
+          </td>
+        </tr>
+      `;
+    }
+    errorTable.innerHTML = rows;
+    section.appendChild(errorTable);
+
+    container.appendChild(section);
+  }
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

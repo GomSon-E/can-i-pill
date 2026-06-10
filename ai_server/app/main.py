@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import ai
+from app.routers import ai, metrics
 
 app = FastAPI()
 
@@ -10,3 +10,4 @@ def health():
 
 
 app.include_router(ai.router)
+app.include_router(metrics.router)

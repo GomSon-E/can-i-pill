@@ -1,9 +1,14 @@
 import os
 import json
+import asyncio
+import time
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
 from google import genai
 from google.genai import types
+
+from app.concurrency import GEMINI_SEMAPHORE
+from app.metrics import record_metric
 
 
 def _load_env():
@@ -28,6 +33,15 @@ MODEL = "gemini-3.1-flash-lite"
 class AnalyzeRequest(BaseModel):
     question: str
     context: str = ''
+
+
+def _record_gemini_metric(endpoint: str, start: float, exc: Exception | None = None) -> None:
+    latency_ms = (time.monotonic() - start) * 1000
+    if exc is None:
+        record_metric(endpoint, 200, latency_ms, True)
+    else:
+        status_code = getattr(exc, "code", None) or 500
+        record_metric(endpoint, status_code, latency_ms, False)
 
 
 _OCR_PROMPT = (
@@ -59,14 +73,21 @@ _OCR_PROMPT = (
 @router.post("/ocr")
 async def ocr(image: UploadFile = File(...)):
     image_bytes = await image.read()
-    response = _client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-            _OCR_PROMPT,
-        ],
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
+    start = time.monotonic()
+    try:
+        async with GEMINI_SEMAPHORE:
+            response = _client.models.generate_content(
+                model=MODEL,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
+                    _OCR_PROMPT,
+                ],
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+    except Exception as e:
+        _record_gemini_metric("/ocr", start, e)
+        raise
+    _record_gemini_metric("/ocr", start)
     return json.loads(response.text)
 
 
@@ -163,17 +184,24 @@ def _normalize_label_result(data: dict) -> dict:
 @router.post("/label")
 async def label(image: UploadFile = File(...)):
     image_bytes = await image.read()
-    response = _client.models.generate_content(
-        model=MODEL,
-        contents=[
-            types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-            _LABEL_PROMPT,
-        ],
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=_LABEL_SCHEMA,
-        ),
-    )
+    start = time.monotonic()
+    try:
+        async with GEMINI_SEMAPHORE:
+            response = _client.models.generate_content(
+                model=MODEL,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
+                    _LABEL_PROMPT,
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=_LABEL_SCHEMA,
+                ),
+            )
+    except Exception as e:
+        _record_gemini_metric("/label", start, e)
+        raise
+    _record_gemini_metric("/label", start)
     return _normalize_label_result(json.loads(response.text))
 
 
@@ -230,26 +258,31 @@ _ANALYSIS_RULES = (
 
 
 @router.post("/analyze")
-def analyze(body: AnalyzeRequest):
+async def analyze(body: AnalyzeRequest):
     context_section = f"\n[사용자 프로필 및 복용 약]\n{body.context}" if body.context else ""
     prompt = f"{_ANALYSIS_RULES}{context_section}\n\n[질문]\n\"{body.question}\""
 
     last_exc: Exception | None = None
     for _ in range(3):
+        start = time.monotonic()
         try:
-            response = _client.models.generate_content(
-                model=MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=_ANALYSIS_SCHEMA,
-                ),
-            )
+            async with GEMINI_SEMAPHORE:
+                response = await asyncio.to_thread(
+                    _client.models.generate_content,
+                    model=MODEL,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=_ANALYSIS_SCHEMA,
+                    ),
+                )
+            _record_gemini_metric("/analyze", start)
             data = json.loads(response.text)
             if data.get("level") not in ("safe", "caution", "danger"):
                 continue
             return data
         except Exception as e:
+            _record_gemini_metric("/analyze", start, e)
             last_exc = e
 
     raise last_exc
