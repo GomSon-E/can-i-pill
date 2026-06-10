@@ -20,6 +20,19 @@ def test_harness_policy_declares_allowed_completion_actions():
     assert set(policy["completion_conditions"]).issubset(policy["allowed_actions"])
 
 
+def test_harness_policy_declares_goal_and_max_steps_for_full_cycle():
+    module = importlib.import_module("app.harness.harness")
+
+    policy = module.HARNESS_POLICY
+
+    assert "goal" in policy
+    assert isinstance(policy["goal"], str) and policy["goal"]
+    assert policy["max_steps"] == 7
+    assert {"finish", "reject", "ask_clarification"}.issubset(
+        set(policy["completion_conditions"])
+    )
+
+
 class _FakeModels:
     def __init__(self, action_name="ping"):
         self.action_name = action_name
