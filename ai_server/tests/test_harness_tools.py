@@ -1,5 +1,7 @@
 import importlib
 
+import httpx
+
 
 def test_harness_tools_module_is_importable():
     module = importlib.import_module("app.harness.tools")
@@ -106,6 +108,28 @@ def test_gather_context_normalizes_populated_backend_data(monkeypatch):
         "health_conditions": ["고혈압"],
         "allergies": ["페니실린"],
     }
+
+
+def test_fetch_backend_data_returns_empty_when_backend_unreachable(monkeypatch):
+    module = importlib.import_module("app.harness.tools")
+
+    class _FailingClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            return False
+
+        def get(self, path):
+            raise httpx.ConnectError("Connection refused")
+
+    monkeypatch.setattr(module.httpx, "Client", lambda base_url: _FailingClient())
+
+    prescriptions, supplements, health = module._fetch_backend_data()
+
+    assert prescriptions == []
+    assert supplements == []
+    assert health == {}
 
 
 def test_ask_clarification_returns_clarification_prompt():

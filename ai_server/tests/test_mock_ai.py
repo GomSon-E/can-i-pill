@@ -90,10 +90,10 @@ def test_post_analyze_returns_mock_analysis():
 
 
 def test_post_analyze_reflects_question():
-    question = "이 약 먹어도 되나요?"
+    question = "메트포르민과 비타민C를 같이 먹어도 될까요?"
     response = client.post("/analyze", json={
         "question": question,
-        "context": "테스트 컨텍스트"
+        "context": "당뇨 환자, 메트포르민 복용 중"
     })
     assert response.status_code == 200
     # The response should be meaningful
@@ -125,8 +125,8 @@ def test_post_analyze_returns_new_schema():
 def test_post_analyze_level_values_are_valid():
     for _ in range(3):
         response = client.post("/analyze", json={
-            "question": "테스트 질문",
-            "context": "테스트 컨텍스트"
+            "question": "메트포르민과 비타민C를 같이 먹어도 될까요?",
+            "context": "당뇨 환자, 메트포르민 복용 중"
         })
         assert response.status_code == 200
         data = response.json()

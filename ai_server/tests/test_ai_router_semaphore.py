@@ -49,16 +49,18 @@ def test_label_acquires_gemini_semaphore(monkeypatch):
 def test_analyze_acquires_gemini_semaphore(monkeypatch):
     seen_values = []
 
-    def fake_generate_content(*args, **kwargs):
+    def fake_run_agent(question, extra_context=""):
         seen_values.append(concurrency.GEMINI_SEMAPHORE._value)
-        return _FakeResponse({
+        return {
+            "type": "analysis",
             "level": "safe",
             "doctorOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
             "pharmacistOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
             "alternatives": [],
-        })
+            "trace": [],
+        }
 
-    monkeypatch.setattr(ai._client.models, "generate_content", fake_generate_content)
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
 
     response = client.post("/analyze", json={"question": "질문", "context": ""})
 

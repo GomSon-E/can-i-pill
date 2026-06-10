@@ -54,15 +54,17 @@ class _FakeResponse:
 def test_analyze_success_records_metric(monkeypatch):
     metrics._METRICS_BUFFER.clear()
 
-    def fake_generate_content(*args, **kwargs):
-        return _FakeResponse({
+    def fake_run_agent(question, extra_context=""):
+        return {
+            "type": "analysis",
             "level": "safe",
             "doctorOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
             "pharmacistOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
             "alternatives": [],
-        })
+            "trace": [],
+        }
 
-    monkeypatch.setattr(ai._client.models, "generate_content", fake_generate_content)
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
 
     client = TestClient(app)
     response = client.post("/analyze", json={"question": "질문", "context": ""})
@@ -78,17 +80,17 @@ def test_analyze_success_records_metric(monkeypatch):
 def test_analyze_failure_records_metric_with_api_error_code(monkeypatch):
     metrics._METRICS_BUFFER.clear()
 
-    def fake_generate_content(*args, **kwargs):
+    def fake_run_agent(question, extra_context=""):
         raise errors.APIError(503, {"error": {"message": "unavailable", "status": "UNAVAILABLE"}})
 
-    monkeypatch.setattr(ai._client.models, "generate_content", fake_generate_content)
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
 
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post("/analyze", json={"question": "질문", "context": ""})
 
     assert response.status_code == 500
-    assert len(metrics._METRICS_BUFFER) == 3
-    for entry in metrics._METRICS_BUFFER:
-        assert entry["endpoint"] == "/analyze"
-        assert entry["status_code"] == 503
-        assert entry["success"] is False
+    assert len(metrics._METRICS_BUFFER) == 1
+    entry = metrics._METRICS_BUFFER[0]
+    assert entry["endpoint"] == "/analyze"
+    assert entry["status_code"] == 503
+    assert entry["success"] is False
