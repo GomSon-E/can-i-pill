@@ -134,3 +134,14 @@ def test_analyze_returns_level_within_allowed_set(monkeypatch):
     result = module.analyze("홍삼 먹어도 되나요?", "고혈압약 복용 중")
 
     assert result["level"] in ("safe", "caution", "danger")
+
+
+def test_reject_returns_rejection_type_with_message():
+    module = importlib.import_module("app.harness.tools")
+
+    result = module.reject("이 서비스의 분석 범위를 벗어난 질문입니다")
+
+    assert result == {
+        "type": "rejection",
+        "message": "이 서비스의 분석 범위를 벗어난 질문입니다",
+    }
