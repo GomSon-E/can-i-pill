@@ -121,16 +121,20 @@ def execute_tool(name, args):
 
 def run_agent(question: str) -> dict:
     messages = [f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"]
+    trace = []
 
     for _ in range(HARNESS_POLICY["max_steps"]):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
         observation = execute_tool(action_name, action_args)
+        trace.append({"action": action_name, "args": action_args, "observation": observation})
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
 
         if action_name == "validate_query":
             if not observation.get("is_relevant"):
-                return reject("이 질문은 약물·영양제·음식 상호작용 분석 서비스의 범위를 벗어났습니다.")
+                result = reject("이 질문은 약물·영양제·음식 상호작용 분석 서비스의 범위를 벗어났습니다.")
+                result["trace"] = trace
+                return result
             if not observation.get("is_clear"):
                 missing_info = observation.get("missing_info") or []
                 reason = (
@@ -138,9 +142,13 @@ def run_agent(question: str) -> dict:
                     if missing_info
                     else "질문이 명확하지 않습니다."
                 )
-                return ask_clarification(reason)
+                result = ask_clarification(reason)
+                result["trace"] = trace
+                return result
 
         if action_name in HARNESS_POLICY["completion_conditions"]:
-            return observation
+            result = dict(observation)
+            result["trace"] = trace
+            return result
 
-    return {"type": "error", "message": "분석 한도 초과"}
+    return {"type": "error", "message": "분석 한도 초과", "trace": trace}

@@ -412,7 +412,7 @@
 - [x] `run_agent` 테스트: 불명확한 질문 → clarification 2 step 내 종료
 - [x] `run_agent` 테스트: 정상 질문 → finish → analysis 결과 반환
 - [x] `run_agent` 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
-- [ ] trace 기록 — 각 step의 action/args/observation 리스트 누적
+- [x] trace 기록 — 각 step의 action/args/observation 리스트 누적
 
 ### H-5. Harness.evaluate() 품질 검증 루프
 
