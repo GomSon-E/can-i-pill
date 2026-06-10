@@ -129,15 +129,7 @@ def execute_tool(name, args):
 _MAX_SELF_EVALUATE_RETRIES = 2
 
 
-def run_agent(question: str, extra_context: str = "") -> dict:
-    initial_message = f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"
-    if extra_context:
-        initial_message += (
-            f"\n\n[클라이언트 제공 보조 정보 - 참고용, gather_context 결과보다 우선순위 낮음]\n{extra_context}"
-        )
-    messages = [initial_message]
-    trace = []
-    eval_retries = 0
+def _run_episode(messages, trace):
     last_analyze_result = None
 
     for _ in range(HARNESS_POLICY["max_steps"]):
@@ -154,6 +146,26 @@ def run_agent(question: str, extra_context: str = "") -> dict:
         if action_name == "analyze":
             last_analyze_result = observation
 
+        if action_name in HARNESS_POLICY["completion_conditions"]:
+            return action_name, observation
+
+    return "error", {"type": "error", "message": "분석 한도 초과"}
+
+
+def run_agent(question: str, extra_context: str = "") -> dict:
+    initial_message = f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"
+    if extra_context:
+        initial_message += (
+            f"\n\n[클라이언트 제공 보조 정보 - 참고용, gather_context 결과보다 우선순위 낮음]\n{extra_context}"
+        )
+    messages = [initial_message]
+    trace = []
+    eval_retries = 0
+    task_completed = False
+
+    while not task_completed:
+        action_name, observation = _run_episode(messages, trace)
+
         if action_name == "finish":
             passed, score, issues = evaluate(observation, question)
             if not passed and eval_retries < _MAX_SELF_EVALUATE_RETRIES:
@@ -164,16 +176,12 @@ def run_agent(question: str, extra_context: str = "") -> dict:
                     "더 자세한 detail과 행동 지침, 상담 권유 문구를 포함하세요."
                 )
                 continue
-            result = dict(observation)
-            result["trace"] = trace
-            return result
 
-        if action_name in HARNESS_POLICY["completion_conditions"]:
-            result = dict(observation)
-            result["trace"] = trace
-            return result
+        task_completed = True
 
-    return {"type": "error", "message": "분석 한도 초과", "trace": trace}
+    result = dict(observation)
+    result["trace"] = trace
+    return result
 
 
 _ACTION_GUIDANCE_KEYWORDS = ["복용", "시간", "간격", "용법", "식전", "식후"]

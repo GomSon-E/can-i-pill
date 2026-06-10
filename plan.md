@@ -462,11 +462,11 @@
 
 #### H-8-2. Self-Evaluate 재시도를 외부 루프 구조로 전환
 
-- [ ] `run_agent`의 단일 패스(validate → gather_context → analyze → finish, max_steps 소비)를 내부 헬퍼(예: `_run_episode(messages, trace) → (action_name, observation)`)로 추출 — completion_conditions 도달 또는 max_steps 도달 시 반환
-- [ ] 테스트: `_run_episode`가 `finish` 도달 시 `("finish", observation)` 반환, max_steps 도달 시 `("error", {...})` 반환
-- [ ] `run_agent`를 `while not task_completed:` 형태의 외부 루프로 재작성 — `_run_episode` 호출 → `finish` 결과면 `evaluate()` 호출 → 미달 시 issues를 messages에 기록하고 `_run_episode`를 재호출(최대 2회), 매 회마다 max_steps 예산을 새로 부여
-- [ ] 테스트: 1차 `_run_episode` 결과가 evaluate 실패(score < 70) → 2차 `_run_episode`가 새로운 max_steps 예산으로 재실행되어 더 긴 응답 반환 (기존 self-evaluate 재시도 테스트를 새 구조로 갱신)
-- [ ] 테스트: `reject` / `ask_clarification` / `error`로 종료된 episode는 `evaluate` 없이 즉시 반환 (self-evaluate는 `finish` 경로에만 적용)
+- [x] `run_agent`의 단일 패스(validate → gather_context → analyze → finish, max_steps 소비)를 내부 헬퍼(예: `_run_episode(messages, trace) → (action_name, observation)`)로 추출 — completion_conditions 도달 또는 max_steps 도달 시 반환
+- [x] 테스트: `_run_episode`가 `finish` 도달 시 `("finish", observation)` 반환, max_steps 도달 시 `("error", {...})` 반환
+- [x] `run_agent`를 `while not task_completed:` 형태의 외부 루프로 재작성 — `_run_episode` 호출 → `finish` 결과면 `evaluate()` 호출 → 미달 시 issues를 messages에 기록하고 `_run_episode`를 재호출(최대 2회), 매 회마다 max_steps 예산을 새로 부여
+- [x] 테스트: 1차 `_run_episode` 결과가 evaluate 실패(score < 70) → 2차 `_run_episode`가 새로운 max_steps 예산으로 재실행되어 더 긴 응답 반환 (기존 self-evaluate 재시도 테스트를 새 구조로 갱신)
+- [x] 테스트: `reject` / `ask_clarification` / `error`로 종료된 episode는 `evaluate` 없이 즉시 반환 (self-evaluate는 `finish` 경로에만 적용)
 
 #### H-8-3. 복합 항목 멀티 에이전트 병렬 분석 (예시 5)
 

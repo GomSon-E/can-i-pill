@@ -513,3 +513,169 @@ def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
     assert result["type"] == "analysis"
     assert "복용 시간" in result["doctorOpinion"]["detail"]
     assert len(result["trace"]) == 6
+
+
+def test_run_episode_returns_finish_action_and_observation(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {"level": "safe"}}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return {"level": "safe", "doctorOpinion": {}, "pharmacistOpinion": {}, "alternatives": []}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    messages = ["initial"]
+    trace = []
+    action_name, observation = module._run_episode(messages, trace)
+
+    assert action_name == "finish"
+    assert observation["type"] == "analysis"
+    assert len(trace) == 4
+
+
+def test_run_episode_returns_error_when_max_steps_exceeded(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "gather_context", {}
+
+    def fake_execute_tool(name, args):
+        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    messages = ["initial"]
+    trace = []
+    action_name, observation = module._run_episode(messages, trace)
+
+    assert action_name == "error"
+    assert observation == {"type": "error", "message": "분석 한도 초과"}
+    assert len(trace) == module.HARNESS_POLICY["max_steps"]
+
+
+def test_run_agent_grants_fresh_max_steps_budget_on_self_evaluate_retry(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    short_result = {
+        "level": "safe",
+        "doctorOpinion": {"summary": "요약", "detail": "괜찮습니다."},
+        "pharmacistOpinion": {"summary": "요약", "detail": "주의하세요."},
+        "alternatives": [],
+    }
+    long_result = {
+        "level": "safe",
+        "doctorOpinion": {
+            "summary": "요약",
+            "detail": "혈압약과 함께 먹으면 흡수가 줄어들 수 있습니다. 복용 시간을 2시간 이상 띄우는 것이 좋습니다.",
+        },
+        "pharmacistOpinion": {
+            "summary": "요약",
+            "detail": "약 복용 후 2시간 간격을 두고 섭취하세요. 추가로 궁금한 점은 의사나 약사와 상담하세요.",
+        },
+        "alternatives": [],
+    }
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("gather_context", {}),
+        ("gather_context", {}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": short_result}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": long_result}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return {}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert "복용 시간" in result["doctorOpinion"]["detail"]
+    assert len(result["trace"]) == 9
+
+
+def test_run_agent_skips_self_evaluate_for_rejection(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "오늘 날씨 어때?"}),
+        ("reject", {"reason": "이 질문은 서비스 범위를 벗어났습니다."}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": False, "is_clear": True, "items": [], "missing_info": []}
+        if name == "reject":
+            return {"type": "rejection", "message": args["reason"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    def fake_evaluate(observation, question):
+        raise AssertionError("evaluate should not be called for a rejection")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "evaluate", fake_evaluate)
+
+    result = module.run_agent("오늘 날씨 어때?")
+
+    assert result["type"] == "rejection"
+
+
+def test_run_agent_skips_self_evaluate_when_max_steps_exceeded(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "gather_context", {}
+
+    def fake_execute_tool(name, args):
+        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+
+    def fake_evaluate(observation, question):
+        raise AssertionError("evaluate should not be called when max_steps is exceeded")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "evaluate", fake_evaluate)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "error"
