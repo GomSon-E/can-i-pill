@@ -416,11 +416,11 @@
 
 ### H-5. Harness.evaluate() 품질 검증 루프
 
-- [ ] `evaluate(result, question) → (bool, int, list)` 구현 — score >= 70 → True
-- [ ] `evaluate`: detail 2문장 이상 여부 (-20점 미달 시)
-- [ ] `evaluate`: 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
-- [ ] `evaluate`: 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
-- [ ] `evaluate` 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
+- [x] `evaluate(result, question) → (bool, int, list)` 구현 — score >= 70 → True
+- [x] `evaluate`: detail 2문장 이상 여부 (-20점 미달 시)
+- [x] `evaluate`: 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
+- [x] `evaluate`: 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
+- [x] `evaluate` 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
 - [ ] `run_agent`에 self-evaluate 재시도 통합 — evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
 - [ ] self-evaluate 재시도 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
 

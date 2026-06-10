@@ -1,3 +1,5 @@
+import re
+
 from google.genai import types
 
 from app.harness.tools import (
@@ -152,3 +154,34 @@ def run_agent(question: str) -> dict:
             return result
 
     return {"type": "error", "message": "분석 한도 초과", "trace": trace}
+
+
+_ACTION_GUIDANCE_KEYWORDS = ["복용", "시간", "간격", "용법", "식전", "식후"]
+_CONSULTATION_KEYWORDS = ["의사", "약사"]
+
+
+def _sentence_count(text: str) -> int:
+    return len([s for s in re.split(r"[.!?]", text) if s.strip()])
+
+
+def evaluate(result: dict, question: str) -> tuple:
+    score = 100
+    issues = []
+
+    doctor_detail = result.get("doctorOpinion", {}).get("detail", "")
+    pharmacist_detail = result.get("pharmacistOpinion", {}).get("detail", "")
+    combined = f"{doctor_detail} {pharmacist_detail}"
+
+    if _sentence_count(doctor_detail) < 2 or _sentence_count(pharmacist_detail) < 2:
+        score -= 20
+        issues.append("detail은 2문장 이상으로 작성해야 합니다.")
+
+    if not any(keyword in combined for keyword in _ACTION_GUIDANCE_KEYWORDS):
+        score -= 20
+        issues.append("복용 시간·간격 등 행동 지침이 포함되어야 합니다.")
+
+    if not any(keyword in combined for keyword in _CONSULTATION_KEYWORDS):
+        score -= 20
+        issues.append("의사·약사 상담 권유 문구가 포함되어야 합니다.")
+
+    return score >= 70, score, issues
