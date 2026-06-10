@@ -147,7 +147,19 @@ def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
 
     result = module.run_agent("홍삼 먹어도 되나요?")
 
-    assert result == {"type": "error", "message": "분석 한도 초과"}
+    assert result["type"] == "error"
+    assert result["message"] == "분석 한도 초과"
+    assert len(result["trace"]) == module.HARNESS_POLICY["max_steps"]
+    assert result["trace"][0] == {
+        "action": "gather_context",
+        "args": {},
+        "observation": {
+            "drugs": [],
+            "supplements": [],
+            "health_conditions": [],
+            "allergies": [],
+        },
+    }
 
 
 def test_run_agent_rejects_irrelevant_question_within_two_steps(monkeypatch):
@@ -267,3 +279,11 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
 
     assert result["type"] == "analysis"
     assert result["level"] == "safe"
+    assert [step["action"] for step in result["trace"]] == [
+        "validate_query",
+        "gather_context",
+        "analyze",
+        "finish",
+    ]
+    assert result["trace"][0]["args"] == {"question": "홍삼 먹어도 되나요?"}
+    assert result["trace"][0]["observation"]["is_relevant"] is True
