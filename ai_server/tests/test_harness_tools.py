@@ -114,3 +114,23 @@ def test_ask_clarification_returns_clarification_prompt():
     result = module.ask_clarification("섭취하려는 항목이 명확하지 않습니다")
 
     assert result == {"clarification_prompt": "섭취하려는 항목이 명확하지 않습니다"}
+
+
+def test_analyze_returns_level_within_allowed_set(monkeypatch):
+    module = importlib.import_module("app.harness.tools")
+
+    def fake_generate_analysis(question, context):
+        assert question == "홍삼 먹어도 되나요?"
+        assert context == "고혈압약 복용 중"
+        return {
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "상세 설명입니다. 두 문장입니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "복용 시간을 띄우세요. 약사와 상담하세요."},
+            "alternatives": [],
+        }
+
+    monkeypatch.setattr(module, "_generate_analysis", fake_generate_analysis)
+
+    result = module.analyze("홍삼 먹어도 되나요?", "고혈압약 복용 중")
+
+    assert result["level"] in ("safe", "caution", "danger")
