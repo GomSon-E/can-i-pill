@@ -493,6 +493,47 @@ describe('S-28: 과거 결과 재조회', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/main-05')
     })
   })
+
+  it('복합 항목 이력 카드 탭 시 상세 응답의 items를 분석 스토어에 복원한다', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          history: [
+            { id: '1', level: 'caution', question: '홍삼 같이 먹어도 돼요?', created_at: '2026-05-16' },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: '1',
+          level: 'caution',
+          question: '홍삼 같이 먹어도 돼요?',
+          items,
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const { analyzeStore } = await import('../store/analyzeStore')
+
+    renderPage('/sub-04')
+    await waitFor(() => screen.getByText('홍삼 같이 먹어도 돼요?'))
+    await userEvent.click(screen.getByTestId('history-card'))
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-05')
+    })
+    expect(analyzeStore.result?.items).toEqual(items)
+  })
 })
 
 // ─────────────────────────────────────────────

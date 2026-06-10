@@ -70,6 +70,7 @@ export default function Main04() {
           doctorOpinion: data.doctorOpinion,
           pharmacistOpinion: data.pharmacistOpinion,
           alternatives: data.alternatives ?? [],
+          items: data.items,
         }
         analyzeStore.result = result
         analyzeStore.message = null

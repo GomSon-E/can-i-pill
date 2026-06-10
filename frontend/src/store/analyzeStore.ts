@@ -14,15 +14,15 @@ export interface AnalyzeItem {
 
 export interface AnalyzeResult {
   level: 'safe' | 'caution' | 'danger'
-  doctorOpinion: {
+  doctorOpinion?: {
     summary: string
     detail: string
   }
-  pharmacistOpinion: {
+  pharmacistOpinion?: {
     summary: string
     detail: string
   }
-  alternatives: string[]
+  alternatives?: string[]
   items?: AnalyzeItem[]
 }
 

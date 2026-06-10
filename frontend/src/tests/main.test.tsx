@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import AppRoutes from '../AppRoutes'
@@ -226,6 +226,34 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     })
   })
 
+  it('MAIN-04는 복합 항목 분석 완료 후 history body에 items를 포함', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'caution', items }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderPage('/main-04')
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/history'), expect.objectContaining({ method: 'POST' }))
+    })
+    const historyCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/history'))
+    expect(JSON.parse(historyCall?.[1]?.body as string)).toMatchObject({
+      level: 'caution',
+      items,
+    })
+  })
+
   it('MAIN-04 분석 완료 후 MAIN-05로 이동', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
@@ -236,6 +264,38 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/main-05')
     })
+  })
+
+  it('MAIN-04는 복합 항목 분석 응답의 items를 저장하고 MAIN-05로 이동', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+      {
+        name: '비타민C',
+        level: 'danger',
+        doctorOpinion: { summary: '출혈 위험 증가', detail: '출혈 위험이 커질 수 있습니다.' },
+        pharmacistOpinion: { summary: '즉시 상담 필요', detail: '복용 간격을 두고 의사와 상담하세요.' },
+        alternatives: [],
+      },
+    ]
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'danger', items }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+
+    renderPage('/main-04')
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-05')
+    })
+    expect(analyzeStore.result?.items).toEqual(items)
   })
 
   it('응답 type이 clarification이면 clarificationPrompt 저장 후 MAIN-02로 복귀', async () => {
@@ -446,6 +506,28 @@ describe('S-16b: 분석 결과 — 복합 항목', () => {
     expect(screen.getByText('비타민C')).toBeInTheDocument()
     expect(screen.getByText(/혈압약과 상호작용 가능성/)).toBeInTheDocument()
     expect(screen.getByText(/출혈 위험 증가/)).toBeInTheDocument()
+  })
+
+  it('top-level 의견 없이 items만 있어도 항목별 결과를 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.result = {
+      level: 'danger',
+      items: [
+        {
+          name: '홍삼',
+          level: 'caution',
+          doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+          pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+          alternatives: [],
+        },
+      ],
+    } as typeof analyzeStore.result
+
+    renderPage('/main-05')
+
+    expect(screen.queryByText('분석 결과 형식이 올바르지 않습니다.')).not.toBeInTheDocument()
+    expect(screen.getByText('홍삼')).toBeInTheDocument()
+    expect(screen.getByText(/혈압약과 상호작용 가능성/)).toBeInTheDocument()
   })
 })
 

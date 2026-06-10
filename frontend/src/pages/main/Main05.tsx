@@ -50,7 +50,10 @@ export default function Main05() {
     )
   }
 
-  if (!result.doctorOpinion || !result.pharmacistOpinion) {
+  const { level, doctorOpinion, pharmacistOpinion, alternatives = [], items } = result
+  const hasItems = Boolean(items && items.length > 0)
+
+  if (!hasItems && (!doctorOpinion || !pharmacistOpinion)) {
     return (
       <div data-testid="page-main-05" style={{ padding: 22 }}>
         분석 결과 형식이 올바르지 않습니다.
@@ -58,16 +61,18 @@ export default function Main05() {
     )
   }
 
-  const { level, doctorOpinion, pharmacistOpinion, alternatives, items } = result
   const banner = getBannerConfig(level)
   const showAlternatives = level === 'caution' || level === 'danger'
   const showExpertButton = level === 'danger'
+  const displayDoctorOpinion = doctorOpinion ?? { summary: '', detail: '' }
+  const displayPharmacistOpinion = pharmacistOpinion ?? { summary: '', detail: '' }
+  const shareSummary = doctorOpinion?.summary ?? items?.map((item) => item.name).join(', ') ?? ''
 
   async function handleShare() {
     try {
       await navigator.share({
         title: '캔아이필 분석 결과',
-        text: `${banner.label}: ${doctorOpinion.summary}`,
+        text: `${banner.label}: ${shareSummary}`,
       })
     } catch {
       // ignore
@@ -227,7 +232,7 @@ export default function Main05() {
                 alignItems: 'center',
               }}
             >
-              <span><strong>의사 의견:</strong> {doctorOpinion.summary}</span>
+              <span><strong>의사 의견:</strong> {displayDoctorOpinion.summary}</span>
               <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
             </button>
             {showDetail && (
@@ -239,7 +244,7 @@ export default function Main05() {
                 color: '#666',
                 lineHeight: 1.5,
               }}>
-                {doctorOpinion.detail}
+                {displayDoctorOpinion.detail}
               </div>
             )}
           </div>
@@ -266,7 +271,7 @@ export default function Main05() {
                 alignItems: 'center',
               }}
             >
-              <span><strong>약사 의견:</strong> {pharmacistOpinion.summary}</span>
+              <span><strong>약사 의견:</strong> {displayPharmacistOpinion.summary}</span>
               <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
             </button>
             {showDetail && (
@@ -278,7 +283,7 @@ export default function Main05() {
                 color: '#666',
                 lineHeight: 1.5,
               }}>
-                {pharmacistOpinion.detail}
+                {displayPharmacistOpinion.detail}
               </div>
             )}
           </div>

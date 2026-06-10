@@ -74,6 +74,7 @@ export default function Sub04() {
       doctorOpinion: data.doctorOpinion,
       pharmacistOpinion: data.pharmacistOpinion,
       alternatives: data.alternatives ?? [],
+      items: data.items,
     }
     navigate('/main-05')
   }
