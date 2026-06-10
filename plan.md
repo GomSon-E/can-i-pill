@@ -437,11 +437,11 @@
 
 ### H-7. 프론트엔드 대응
 
-- [ ] userId 상태 추가 없음 — POST /user 응답/저장 구조 변경하지 않음
-- [ ] `/analyze` 요청 body는 기존 `{ question, context }` 형태 유지
-- [ ] `analyzeStore`에 `responseType: "analysis" | "clarification" | "rejection" | "error" | null` 필드 추가
-- [ ] `Main04.tsx`: 응답 type이 `"clarification"`이면 clarification_prompt 표시 후 Main02 복귀
-- [ ] `Main04.tsx`: 응답 type이 `"rejection"`이면 message 토스트 표시 후 Main02 복귀
-- [ ] `Main04.tsx`: 응답 type이 `"error"`이면 message 표시 후 Main02 복귀
-- [ ] `Main04.tsx`: 응답 type이 `"analysis"`이면 기존대로 Main05 이동
-- [ ] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시
+- [x] userId 상태 추가 없음 — POST /user 응답/저장 구조 변경하지 않음
+- [x] `/analyze` 요청 body는 기존 `{ question, context }` 형태 유지
+- [x] `analyzeStore`에 `responseType: "analysis" | "clarification" | "rejection" | "error" | null` 필드 추가
+- [x] `Main04.tsx`: 응답 type이 `"clarification"`이면 clarification_prompt 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"rejection"`이면 message 토스트 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"error"`이면 message 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"analysis"`이면 기존대로 Main05 이동
+- [x] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시

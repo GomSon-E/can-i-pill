@@ -44,6 +44,27 @@ export default function Main04() {
         })
         if (!res.ok) throw new Error(`analyze failed: ${res.status}`)
         const data = await res.json()
+        const responseType = data.type ?? 'analysis'
+        analyzeStore.responseType = responseType
+
+        if (responseType === 'clarification') {
+          analyzeStore.clarificationPrompt = data.clarification_prompt ?? data.clarificationPrompt ?? ''
+          analyzeStore.message = null
+          analyzeStore.result = null
+          if (timerRef.current) clearInterval(timerRef.current)
+          navigate('/main-02')
+          return
+        }
+
+        if (responseType === 'rejection' || responseType === 'error') {
+          analyzeStore.message = data.message ?? '분석을 완료하지 못했어요'
+          analyzeStore.clarificationPrompt = null
+          analyzeStore.result = null
+          if (timerRef.current) clearInterval(timerRef.current)
+          navigate('/main-02')
+          return
+        }
+
         const result = {
           level: data.level,
           doctorOpinion: data.doctorOpinion,
@@ -51,6 +72,8 @@ export default function Main04() {
           alternatives: data.alternatives ?? [],
         }
         analyzeStore.result = result
+        analyzeStore.message = null
+        analyzeStore.clarificationPrompt = null
 
         // Save to history
         await fetch('/history', {
