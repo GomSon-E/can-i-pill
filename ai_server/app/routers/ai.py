@@ -1,6 +1,5 @@
 import os
 import json
-import asyncio
 import time
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
@@ -263,7 +262,7 @@ async def analyze(body: AnalyzeRequest):
     start = time.monotonic()
     try:
         async with GEMINI_SEMAPHORE:
-            result = await asyncio.to_thread(harness.run_agent, body.question, body.context)
+            result = harness.run_agent(body.question, body.context)
     except Exception as e:
         _record_gemini_metric("/analyze", start, e)
         raise
