@@ -128,6 +128,18 @@ def run_agent(question: str) -> dict:
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
 
+        if action_name == "validate_query":
+            if not observation.get("is_relevant"):
+                return reject("이 질문은 약물·영양제·음식 상호작용 분석 서비스의 범위를 벗어났습니다.")
+            if not observation.get("is_clear"):
+                missing_info = observation.get("missing_info") or []
+                reason = (
+                    "다음 정보가 더 필요합니다: " + ", ".join(missing_info)
+                    if missing_info
+                    else "질문이 명확하지 않습니다."
+                )
+                return ask_clarification(reason)
+
         if action_name in HARNESS_POLICY["completion_conditions"]:
             return observation
 

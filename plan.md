@@ -404,14 +404,14 @@
 - [x] `execute_tool(name, args) → dict` 구현
 - [x] `execute_tool` 테스트: allowed_actions 외 이름 → `PermissionError`
 - [x] `run_agent(question: str) → dict` 구현 — messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
-- [ ] `run_agent` 분기 규칙: `is_relevant=false` → `reject`
-- [ ] `run_agent` 분기 규칙: `is_relevant=true, is_clear=false` → `ask_clarification`
-- [ ] `run_agent` 분기 규칙: `is_relevant=false, is_clear=true`처럼 애매한 조합 → 무관 질문으로 보고 `reject`
-- [ ] `run_agent` 분기 규칙: `is_relevant=false, is_clear=false` → 서비스 범위 밖이거나 정보 부족한 질문으로 보고 `reject` 우선
-- [ ] `run_agent` 테스트: 무관한 질문 → reject 2 step 내 종료
-- [ ] `run_agent` 테스트: 불명확한 질문 → clarification 2 step 내 종료
-- [ ] `run_agent` 테스트: 정상 질문 → finish → analysis 결과 반환
-- [ ] `run_agent` 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
+- [x] `run_agent` 분기 규칙: `is_relevant=false` → `reject`
+- [x] `run_agent` 분기 규칙: `is_relevant=true, is_clear=false` → `ask_clarification`
+- [x] `run_agent` 분기 규칙: `is_relevant=false, is_clear=true`처럼 애매한 조합 → 무관 질문으로 보고 `reject`
+- [x] `run_agent` 분기 규칙: `is_relevant=false, is_clear=false` → 서비스 범위 밖이거나 정보 부족한 질문으로 보고 `reject` 우선
+- [x] `run_agent` 테스트: 무관한 질문 → reject 2 step 내 종료
+- [x] `run_agent` 테스트: 불명확한 질문 → clarification 2 step 내 종료
+- [x] `run_agent` 테스트: 정상 질문 → finish → analysis 결과 반환
+- [x] `run_agent` 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
 - [ ] trace 기록 — 각 step의 action/args/observation 리스트 누적
 
 ### H-5. Harness.evaluate() 품질 검증 루프
