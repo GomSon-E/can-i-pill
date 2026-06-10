@@ -2,6 +2,11 @@ from google.genai import types
 
 
 HARNESS_POLICY = {
+    "goal": (
+        "사용자의 약물·영양제·음식 상호작용 질문에 대해 "
+        "validate_query → gather_context → analyze → finish 순서로 분석하고, "
+        "필요 시 self-evaluate 재시도(최대 2회)를 거쳐 답변 품질을 보장한다."
+    ),
     "allowed_actions": [
         "validate_query",
         "gather_context",

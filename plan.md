@@ -399,8 +399,8 @@
 
 ### H-4. Harness 루프 구현 (harness.py)
 
-- [ ] `HARNESS_POLICY` 상수 정의 (goal, allowed_actions, max_steps: 7, completion_conditions) — validate → gather_context → analyze → finish 기본 4 step과 self-evaluate 재시도 최대 2회를 수용
-- [ ] `HARNESS_POLICY`의 completion_conditions에 `finish`, `reject`, `ask_clarification` 포함
+- [x] `HARNESS_POLICY` 상수 정의 (goal, allowed_actions, max_steps: 7, completion_conditions) — validate → gather_context → analyze → finish 기본 4 step과 self-evaluate 재시도 최대 2회를 수용
+- [x] `HARNESS_POLICY`의 completion_conditions에 `finish`, `reject`, `ask_clarification` 포함
 - [ ] `execute_tool(name, args) → dict` 구현
 - [ ] `execute_tool` 테스트: allowed_actions 외 이름 → `PermissionError`
 - [ ] `run_agent(question: str) → dict` 구현 — messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
