@@ -106,3 +106,11 @@ def test_gather_context_normalizes_populated_backend_data(monkeypatch):
         "health_conditions": ["고혈압"],
         "allergies": ["페니실린"],
     }
+
+
+def test_ask_clarification_returns_clarification_prompt():
+    module = importlib.import_module("app.harness.tools")
+
+    result = module.ask_clarification("섭취하려는 항목이 명확하지 않습니다")
+
+    assert result == {"clarification_prompt": "섭취하려는 항목이 명확하지 않습니다"}
