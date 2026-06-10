@@ -148,3 +148,122 @@ def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
     result = module.run_agent("홍삼 먹어도 되나요?")
 
     assert result == {"type": "error", "message": "분석 한도 초과"}
+
+
+def test_run_agent_rejects_irrelevant_question_within_two_steps(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "validate_query", {"question": "오늘 날씨 어때?"}
+
+    calls = []
+
+    def fake_execute_tool(name, args):
+        calls.append(name)
+        assert name == "validate_query"
+        return {"is_relevant": False, "is_clear": True, "items": [], "missing_info": []}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("오늘 날씨 어때?")
+
+    assert result["type"] == "rejection"
+    assert len(calls) <= 2
+
+
+def test_run_agent_rejects_irrelevant_and_unclear_question(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "validate_query", {"question": "이거요"}
+
+    def fake_execute_tool(name, args):
+        return {"is_relevant": False, "is_clear": False, "items": [], "missing_info": ["대상"]}
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("이거요")
+
+    assert result["type"] == "rejection"
+
+
+def test_run_agent_asks_clarification_for_unclear_question_within_two_steps(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return "validate_query", {"question": "이거 먹어도 돼요?"}
+
+    calls = []
+
+    def fake_execute_tool(name, args):
+        calls.append(name)
+        assert name == "validate_query"
+        return {
+            "is_relevant": True,
+            "is_clear": False,
+            "items": [],
+            "missing_info": ["섭취하려는 항목"],
+        }
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("이거 먹어도 돼요?")
+
+    assert "clarification_prompt" in result
+    assert len(calls) <= 2
+
+
+def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {"level": "safe"}}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    observations = {
+        "validate_query": {
+            "is_relevant": True,
+            "is_clear": True,
+            "items": ["홍삼"],
+            "missing_info": [],
+        },
+        "gather_context": {
+            "drugs": [],
+            "supplements": [],
+            "health_conditions": [],
+            "allergies": [],
+        },
+        "analyze": {
+            "level": "safe",
+            "doctorOpinion": {"summary": "요약", "detail": "상세"},
+            "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+            "alternatives": [],
+        },
+        "finish": {
+            "type": "analysis",
+            "level": "safe",
+            "doctorOpinion": {"summary": "요약", "detail": "상세"},
+            "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+            "alternatives": [],
+        },
+    }
+
+    def fake_execute_tool(name, args):
+        return observations[name]
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert result["level"] == "safe"
