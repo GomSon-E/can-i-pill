@@ -480,3 +480,74 @@
 - [x] 테스트: 기존 단일 항목 질문은 `items` 없이 기존 응답 스키마 유지 (회귀 방지)
 - [x] `frontend/src/store/analyzeStore.ts`의 `AnalyzeResult`에 옵셔널 `items?: AnalyzeItem[]` 필드 추가
 - [x] `Main05.tsx`에서 `items`가 있으면 항목별 결과를 표시하고, 없으면 기존 단일 결과 표시를 유지
+
+### H-9. Harness 리뷰 후속 보완 — 복합 항목 통합 경로 / 이력 / retry 상태 / tool-call 안정성
+
+> 코드 리뷰에서 발견한 결함을 TDD 방식으로 보완한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+> 구조 변경과 동작 변경이 모두 필요하면 구조 변경을 먼저 작게 분리하고, 테스트가 통과한 상태에서 다음 행동 변경으로 넘어간다.
+
+#### H-9-1. 프론트 복합 항목 응답 저장 경로 보완
+
+- [x] 테스트: `Main04.tsx`가 `/analyze`에서 `{ type: "analysis", level, items }` 응답을 받으면 `analyzeStore.result.items`에 그대로 저장하고 `/main-05`로 이동한다.
+- [x] `Main04.tsx`: analysis 응답 저장 시 `items: data.items`를 포함한다. 단일 항목 응답은 기존 `doctorOpinion`/`pharmacistOpinion`/`alternatives` 저장 동작을 유지한다.
+- [x] 테스트: `Main05.tsx`는 `items`가 있는 복합 항목 결과에서 top-level `doctorOpinion`/`pharmacistOpinion`이 없어도 "분석 결과 형식이 올바르지 않습니다."로 빠지지 않고 항목별 결과를 렌더한다.
+- [x] `Main05.tsx`: 결과 형식 검증을 단일 항목 경로와 복합 항목 경로로 분리한다. `items.length > 0`이면 top-level opinion 필수 검증을 건너뛴다.
+
+#### H-9-2. 복합 항목 이력 저장/복원 보완
+
+- [x] 테스트: `backend/tests/test_history.py`에서 POST `/history`가 `items` 배열을 포함한 복합 항목 분석 결과를 저장하고 GET `/history/{id}`가 `items`를 반환한다.
+- [x] `backend/app/routers/history.py`: `HistoryCreate`에 옵셔널 `items` 필드를 추가하고, `items`가 있으면 top-level `doctorOpinion`/`pharmacistOpinion` 없이도 저장 가능하게 한다.
+- [x] 테스트: `Main04.tsx`가 복합 항목 분석 완료 후 POST `/history` body에 `items`를 포함한다.
+- [x] `Main04.tsx`: history 저장 body에 `items`를 포함한다. 단일 항목 history body는 기존 스키마를 유지한다.
+- [x] 테스트: `Sub04.tsx`에서 복합 항목 이력 카드를 탭하면 GET `/history/{id}` 응답의 `items`가 `analyzeStore.result.items`에 복원된다.
+- [x] `Sub04.tsx`: 이력 상세 복원 시 `items: data.items`를 포함한다.
+
+#### H-9-3. 복합 항목 self-evaluate retry 상태 보존
+
+- [x] 테스트: `run_agent`에서 1차 복합 항목 `finish` 결과가 `evaluate()` 실패 후 retry될 때, 다음 episode가 바로 `analyze`를 선택해도 이전 `validate_query.items`를 사용해 `run_sub_agents`를 다시 호출한다.
+- [x] `harness.py`: episode 사이에 검증된 `items` 상태를 보존한다. `_run_episode`가 `items`를 입력/출력하거나 shared state를 받도록 가장 작은 구조 변경을 먼저 적용한다.
+- [x] 테스트: retry 후 최종 `finish` 결과가 복합 항목 `items`와 최고 위험도 `level`을 유지한다.
+- [x] `harness.py`: self-evaluate 메시지에 보완해야 할 이슈뿐 아니라 복합 항목 목록도 명시해 모델이 단일 분석으로 흐르지 않게 한다.
+
+#### H-9-4. Gemini tool-call 부재/비허용 action 안정성 보완
+
+- [x] 테스트: `_call_with_tools`가 Gemini 응답에서 `function_calls`가 비어 있는 경우 `("error", {"message": ...})` 또는 전용 예외처럼 하네스가 처리 가능한 실패를 반환/발생시킨다.
+- [x] `harness.py`: function call이 없을 때 `IndexError`로 500이 나지 않도록 명시적 오류 경로를 추가한다.
+- [x] 테스트: `_call_with_tools`가 allowed_actions 밖의 action을 반환한 경우 `run_agent`가 미처리 예외 대신 `{ type: "error", message }` 형태로 종료한다.
+- [x] `harness.py`: `execute_tool`의 `PermissionError`를 episode 단위에서 잡아 trace에 기록하고 error observation으로 종료한다.
+- [x] 테스트: `/analyze` 통합 테스트에서 tool-call 부재 또는 비허용 action 시 응답 `type`이 `"error"`이고 metrics 기록이 실패 예외가 아닌 정상 응답 경로로 남는다.
+
+### H-10. Harness 2차 리뷰 후속 보완 — 항목별 평가 / error 정규화 / sub-agent 실패 방어 / dispatch 테스트 정합성
+
+> 2차 코드 리뷰에서 발견한 하네스 내부 품질·안정성 이슈를 TDD 방식으로 보완한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+> 구조 변경과 동작 변경을 섞지 않는다. 테스트 신뢰도를 높이는 정리 작업은 동작 변경 전에 작게 수행한다.
+
+#### H-10-1. 복합 항목 evaluate()를 항목별 품질 검증으로 강화
+
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item의 `doctorOpinion.detail` 또는 `pharmacistOpinion.detail`이 2문장 미만이면 다른 item이 충분해도 실패한다.
+- [x] `harness.py`: `evaluate()`의 복합 항목 경로를 item별로 순회하며 detail 문장 수를 각각 검사한다.
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item에 복용 시간·간격 등 행동 지침 키워드가 없으면 실패한다.
+- [x] `harness.py`: 복합 항목의 행동 지침 키워드 검사를 item별 combined detail 기준으로 수행한다.
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item에 의사·약사 상담 권유 문구가 없으면 실패한다.
+- [x] `harness.py`: 복합 항목의 상담 권유 키워드 검사를 item별 combined detail 기준으로 수행한다.
+- [x] 테스트: 모든 item이 detail 2문장 이상, 행동 지침, 상담 권유를 충족하면 복합 항목 `evaluate()`가 통과한다.
+
+#### H-10-2. error action 결과 정규화
+
+- [x] 테스트: `_call_with_tools` 또는 mock agent가 `("error", {"message": "실패"})`처럼 `type` 없는 error args를 반환해도 `run_agent()` 최종 결과는 `{ type: "error", message: "실패" }`가 된다.
+- [x] `harness.py`: `_run_episode()`의 `action_name == "error"` 분기에서 observation을 항상 `{ type: "error", message }` 형태로 정규화한다.
+- [x] 테스트: `/analyze`는 type 없는 error args가 하네스에서 반환되는 경우에도 `"clarification"`으로 fallback하지 않고 `"error"`를 반환한다.
+
+#### H-10-3. sub-agent 실패를 하네스 error로 흡수
+
+- [x] 테스트: 복합 항목 분석 중 `_run_sub_agents_sync()`가 예외를 던지면 `run_agent()`가 미처리 예외 대신 `{ type: "error", message, trace }`를 반환한다.
+- [x] `harness.py`: multi-item `analyze` 경로에서 sub-agent 예외를 잡아 error observation으로 trace에 기록하고 episode를 종료한다.
+- [x] 테스트: sub-agent 실패 시 `/analyze` 응답은 HTTP 200 + `{ type: "error" }`이며 metrics는 실패 예외가 아닌 정상 응답 경로로 기록된다.
+
+#### H-10-4. execute_tool dispatch 테스트 정합성 보완
+
+- [x] 테스트 정리: `test_execute_tool_calls_matching_tool_function`이 `module.ask_clarification` monkeypatch에 의존하지 않고 `_TOOL_FUNCTIONS["ask_clarification"]` dispatch를 직접 검증하도록 변경한다.
+- [x] 테스트: `_TOOL_FUNCTIONS`에 선언된 모든 action 이름이 `HARNESS_POLICY["allowed_actions"]`에 포함되고, `TOOL_DECLARATIONS` 이름과도 일치한다.
+- [x] 필요 시 `harness.py`: dispatch table 생성 방식 또는 테스트 fixture를 정리하되 런타임 동작은 변경하지 않는다.
