@@ -50,10 +50,13 @@ def validate_query(question: str) -> dict:
 
 
 def _fetch_backend_data():
-    with httpx.Client(base_url=BACKEND_URL) as client:
-        prescriptions_resp = client.get("/prescriptions")
-        supplements_resp = client.get("/supplements")
-        health_resp = client.get("/health-info")
+    try:
+        with httpx.Client(base_url=BACKEND_URL) as client:
+            prescriptions_resp = client.get("/prescriptions")
+            supplements_resp = client.get("/supplements")
+            health_resp = client.get("/health-info")
+    except httpx.RequestError:
+        return [], [], {}
 
     prescriptions = (
         prescriptions_resp.json().get("prescriptions", [])

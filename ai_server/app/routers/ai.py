@@ -9,6 +9,7 @@ from google.genai import types
 
 from app.concurrency import GEMINI_SEMAPHORE
 from app.metrics import record_metric
+from app.harness import harness
 
 
 def _load_env():
@@ -259,30 +260,15 @@ _ANALYSIS_RULES = (
 
 @router.post("/analyze")
 async def analyze(body: AnalyzeRequest):
-    context_section = f"\n[사용자 프로필 및 복용 약]\n{body.context}" if body.context else ""
-    prompt = f"{_ANALYSIS_RULES}{context_section}\n\n[질문]\n\"{body.question}\""
+    start = time.monotonic()
+    try:
+        async with GEMINI_SEMAPHORE:
+            result = await asyncio.to_thread(harness.run_agent, body.question, body.context)
+    except Exception as e:
+        _record_gemini_metric("/analyze", start, e)
+        raise
+    _record_gemini_metric("/analyze", start)
 
-    last_exc: Exception | None = None
-    for _ in range(3):
-        start = time.monotonic()
-        try:
-            async with GEMINI_SEMAPHORE:
-                response = await asyncio.to_thread(
-                    _client.models.generate_content,
-                    model=MODEL,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=_ANALYSIS_SCHEMA,
-                    ),
-                )
-            _record_gemini_metric("/analyze", start)
-            data = json.loads(response.text)
-            if data.get("level") not in ("safe", "caution", "danger"):
-                continue
-            return data
-        except Exception as e:
-            _record_gemini_metric("/analyze", start, e)
-            last_exc = e
-
-    raise last_exc
+    if "type" not in result:
+        result = {"type": "clarification", **result}
+    return result

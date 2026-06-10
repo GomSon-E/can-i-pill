@@ -124,17 +124,30 @@ def execute_tool(name, args):
 _MAX_SELF_EVALUATE_RETRIES = 2
 
 
-def run_agent(question: str) -> dict:
-    messages = [f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"]
+def run_agent(question: str, extra_context: str = "") -> dict:
+    initial_message = f"{HARNESS_POLICY['goal']}\n\n[사용자 질문]\n{question}"
+    if extra_context:
+        initial_message += (
+            f"\n\n[클라이언트 제공 보조 정보 - 참고용, gather_context 결과보다 우선순위 낮음]\n{extra_context}"
+        )
+    messages = [initial_message]
     trace = []
     eval_retries = 0
+    last_analyze_result = None
 
     for _ in range(HARNESS_POLICY["max_steps"]):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
+
+        if action_name == "finish" and last_analyze_result:
+            action_args = {"result": {**last_analyze_result, **(action_args.get("result") or {})}}
+
         observation = execute_tool(action_name, action_args)
         trace.append({"action": action_name, "args": action_args, "observation": observation})
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
+
+        if action_name == "analyze":
+            last_analyze_result = observation
 
         if action_name == "validate_query":
             if not observation.get("is_relevant"):

@@ -426,14 +426,14 @@
 
 ### H-6. /analyze 엔드포인트 통합
 
-- [ ] `AnalyzeRequest` 스키마는 `{ question: str, context: str = "" }` 유지 — 프론트/백엔드의 기존 요청 계약을 최대한 유지한다.
-- [ ] Harness 전환 후 기본 context는 `gather_context()`가 백엔드 API에서 구성한다.
-- [ ] 기존 클라이언트가 보내는 `context`는 호환용으로 받되, 새 하네스 경로에서는 우선순위를 낮추거나 분석 보조 정보로만 사용한다.
-- [ ] `ai.py`의 `analyze()` 핸들러에서 `harness.run_agent(question)` 호출로 교체
-- [ ] 응답 스키마에 `type` 필드 포함: `"analysis" | "clarification" | "rejection" | "error"`
-- [ ] 통합 테스트: 무관한 질문 → `{ type: "rejection" }` 반환
-- [ ] 통합 테스트: 불명확한 질문 → `{ type: "clarification", clarification_prompt }` 반환
-- [ ] 통합 테스트: 정상 질문 → `{ type: "analysis", level, doctorOpinion, ... }` 반환
+- [x] `AnalyzeRequest` 스키마는 `{ question: str, context: str = "" }` 유지 — 프론트/백엔드의 기존 요청 계약을 최대한 유지한다.
+- [x] Harness 전환 후 기본 context는 `gather_context()`가 백엔드 API에서 구성한다.
+- [x] 기존 클라이언트가 보내는 `context`는 호환용으로 받되, 새 하네스 경로에서는 우선순위를 낮추거나 분석 보조 정보로만 사용한다.
+- [x] `ai.py`의 `analyze()` 핸들러에서 `harness.run_agent(question)` 호출로 교체
+- [x] 응답 스키마에 `type` 필드 포함: `"analysis" | "clarification" | "rejection" | "error"`
+- [x] 통합 테스트: 무관한 질문 → `{ type: "rejection" }` 반환
+- [x] 통합 테스트: 불명확한 질문 → `{ type: "clarification", clarification_prompt }` 반환
+- [x] 통합 테스트: 정상 질문 → `{ type: "analysis", level, doctorOpinion, ... }` 반환
 
 ### H-7. 프론트엔드 대응
 
