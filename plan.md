@@ -470,10 +470,10 @@
 
 #### H-8-3. 복합 항목 멀티 에이전트 병렬 분석 (예시 5)
 
-- [ ] `tools.py`에 `analyze_item(item: str, context: str) → dict` 구현 — 단일 항목에 대한 `{ name, level, doctorOpinion, pharmacistOpinion, alternatives }` 반환 (기존 `analyze`의 분석 규칙을 항목 단위로 재사용)
-- [ ] 테스트: `analyze_item`은 항상 `level ∈ {safe, caution, danger}` 및 `name == item` 반환
-- [ ] `harness.py`에 `run_sub_agents(items: list[str], context: str) → list[dict]` 구현 — `asyncio.gather` + `asyncio.to_thread`로 항목별 `analyze_item`을 병렬 실행
-- [ ] 테스트: `run_sub_agents`가 mock된 `analyze_item`을 항목 수만큼 병렬 호출하고 입력 순서대로 결과 리스트 반환
+- [x] `tools.py`에 `analyze_item(item: str, context: str) → dict` 구현 — 단일 항목에 대한 `{ name, level, doctorOpinion, pharmacistOpinion, alternatives }` 반환 (기존 `analyze`의 분석 규칙을 항목 단위로 재사용)
+- [x] 테스트: `analyze_item`은 항상 `level ∈ {safe, caution, danger}` 및 `name == item` 반환
+- [x] `harness.py`에 `run_sub_agents(items: list[str], context: str) → list[dict]` 구현 — `asyncio.gather` + `asyncio.to_thread`로 항목별 `analyze_item`을 병렬 실행
+- [x] 테스트: `run_sub_agents`가 mock된 `analyze_item`을 항목 수만큼 병렬 호출하고 입력 순서대로 결과 리스트 반환
 - [ ] `run_agent` 분기: `validate_query` 관측의 `items` 길이가 2 이상이고 agent가 `analyze`를 선택하면 단일 `analyze` 대신 `run_sub_agents` 결과를 관측으로 사용
 - [ ] `finish`/응답 스키마에 `items: [{ name, level, doctorOpinion, pharmacistOpinion, alternatives }, ...]` 필드 추가, 최상위 `level`은 `items` 중 최고 위험도(`danger > caution > safe`)로 산출
 - [ ] 테스트: `validate_query`의 `items`가 2개 이상인 질문 → `finish` 결과에 `items` 배열과 최고 위험도 `level` 포함

@@ -1,3 +1,4 @@
+import asyncio
 import importlib
 
 import pytest
@@ -679,3 +680,26 @@ def test_run_agent_skips_self_evaluate_when_max_steps_exceeded(monkeypatch):
     result = module.run_agent("홍삼 먹어도 되나요?")
 
     assert result["type"] == "error"
+
+
+def test_run_sub_agents_calls_analyze_item_in_parallel_and_preserves_order(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    calls = []
+
+    def fake_analyze_item(item, context):
+        calls.append(item)
+        return {
+            "name": item,
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "상세"},
+            "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+            "alternatives": [],
+        }
+
+    monkeypatch.setattr(module, "analyze_item", fake_analyze_item)
+
+    results = asyncio.run(module.run_sub_agents(["홍삼", "비타민C"], "고혈압약 복용 중"))
+
+    assert [r["name"] for r in results] == ["홍삼", "비타민C"]
+    assert set(calls) == {"홍삼", "비타민C"}

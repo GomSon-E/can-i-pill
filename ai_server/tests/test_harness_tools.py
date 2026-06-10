@@ -188,3 +188,24 @@ def test_finish_returns_analysis_type_with_result_fields():
         "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
         "alternatives": [],
     }
+
+
+def test_analyze_item_returns_name_and_level_within_allowed_set(monkeypatch):
+    module = importlib.import_module("app.harness.tools")
+
+    def fake_generate_item_analysis(item, context):
+        assert item == "홍삼"
+        assert context == "고혈압약 복용 중"
+        return {
+            "level": "caution",
+            "doctorOpinion": {"summary": "요약", "detail": "상세 설명입니다. 두 문장입니다."},
+            "pharmacistOpinion": {"summary": "요약", "detail": "복용 시간을 띄우세요. 약사와 상담하세요."},
+            "alternatives": [],
+        }
+
+    monkeypatch.setattr(module, "_generate_item_analysis", fake_generate_item_analysis)
+
+    result = module.analyze_item("홍삼", "고혈압약 복용 중")
+
+    assert result["name"] == "홍삼"
+    assert result["level"] in ("safe", "caution", "danger")

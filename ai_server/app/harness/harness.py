@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from google.genai import types
@@ -7,6 +8,7 @@ from app.harness.tools import (
     gather_context,
     ask_clarification,
     analyze,
+    analyze_item,
     reject,
     finish,
 )
@@ -124,6 +126,12 @@ def execute_tool(name, args):
         raise PermissionError(f"Action '{name}' is not allowed")
 
     return _TOOL_FUNCTIONS[name](**args)
+
+
+async def run_sub_agents(items: list, context: str) -> list:
+    return await asyncio.gather(
+        *(asyncio.to_thread(analyze_item, item, context) for item in items)
+    )
 
 
 _MAX_SELF_EVALUATE_RETRIES = 2

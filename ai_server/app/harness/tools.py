@@ -124,6 +124,32 @@ def analyze(question: str, context: str) -> dict:
     return data
 
 
+def _generate_item_analysis(item: str, context: str) -> dict:
+    from app.routers.ai import MODEL, _client, _ANALYSIS_RULES, _ANALYSIS_SCHEMA
+
+    context_section = f"\n[사용자 프로필 및 복용 약]\n{context}" if context else ""
+    prompt = f"{_ANALYSIS_RULES}{context_section}\n\n[분석 대상 항목]\n\"{item}\""
+
+    response = _client.models.generate_content(
+        model=MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=_ANALYSIS_SCHEMA,
+        ),
+    )
+    return json.loads(response.text)
+
+
+def analyze_item(item: str, context: str) -> dict:
+    data = {}
+    for _ in range(3):
+        data = _generate_item_analysis(item, context)
+        if data.get("level") in ("safe", "caution", "danger"):
+            return {"name": item, **data}
+    return {"name": item, **data}
+
+
 def reject(reason: str) -> dict:
     return {"type": "rejection", "message": reason}
 
