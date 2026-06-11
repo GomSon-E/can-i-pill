@@ -81,7 +81,7 @@ export default function Sub01() {
   const totalDrugs = prescriptions.reduce((sum, p) => sum + p.drugs.length, 0)
 
   const handleDeleteConfirm = async () => {
-    if (!dialog) return
+    if (!dialog || dialog.type !== 'delete') return
     const id = dialog.prescriptionId
     setDialog(null)
     await fetch(`/prescriptions/${id}`, { method: 'DELETE' })
