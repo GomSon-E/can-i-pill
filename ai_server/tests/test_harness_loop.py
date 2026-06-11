@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import json
 
 import pytest
 from google.genai import types
@@ -509,6 +510,48 @@ def test_run_agent_backfills_finish_result_with_missing_analyze_fields(monkeypat
     assert result["level"] == "caution"
     assert result["alternatives"] == ["대체 식품"]
     assert "복용 시간" in result["doctorOpinion"]["detail"]
+
+
+def test_run_agent_handles_finish_result_returned_as_json_string(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": json.dumps({"level": "safe"})}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    analyze_observation = {
+        "level": "caution",
+        "doctorOpinion": {"summary": "기존 요약", "detail": "기존 detail"},
+        "pharmacistOpinion": {"summary": "기존 요약", "detail": "기존 detail"},
+        "alternatives": ["대체 식품"],
+    }
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return analyze_observation
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "_generate_judge", _passing_judge)
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert result["level"] == "safe"
+    assert result["alternatives"] == ["대체 식품"]
 
 
 def _judge_scores(factuality=5, readability=5, usefulness=5, schema=5, jargon_terms_found=None):

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import threading
 
 from google.genai import types
@@ -183,8 +184,18 @@ def _run_episode(messages, trace, state=None):
             messages.append(f"[Observation] {observation}")
             return action_name, observation
 
-        if action_name == "finish" and last_analyze_result:
-            action_args = {"result": {**last_analyze_result, **(action_args.get("result") or {})}}
+        if action_name == "finish":
+            finish_result = action_args.get("result")
+            if isinstance(finish_result, str):
+                try:
+                    finish_result = json.loads(finish_result)
+                except (TypeError, ValueError):
+                    finish_result = {}
+            if not isinstance(finish_result, dict):
+                finish_result = {}
+            if last_analyze_result:
+                finish_result = {**last_analyze_result, **finish_result}
+            action_args = {"result": finish_result}
 
         items = state.get("items") or []
         if action_name == "analyze" and len(items) >= 2:
