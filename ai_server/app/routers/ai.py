@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
+from app.analyze_logs import record_analyze_log
 from app.concurrency import GEMINI_SEMAPHORE
 from app.metrics import record_metric
 from app.harness import harness
@@ -37,13 +38,14 @@ class AnalyzeRequest(BaseModel):
     context: str = ''
 
 
-def _record_gemini_metric(endpoint: str, start: float, exc: Exception | None = None) -> None:
+def _record_gemini_metric(endpoint: str, start: float, exc: Exception | None = None) -> float:
     latency_ms = (time.monotonic() - start) * 1000
     if exc is None:
         record_metric(endpoint, 200, latency_ms, True)
     else:
         status_code = getattr(exc, "code", None) or 500
         record_metric(endpoint, status_code, latency_ms, False)
+    return latency_ms
 
 
 _OCR_PROMPT = (
@@ -216,10 +218,11 @@ async def analyze(body: AnalyzeRequest):
     except Exception as e:
         _record_gemini_metric("/analyze", start, e)
         raise
-    _record_gemini_metric("/analyze", start)
+    latency_ms = _record_gemini_metric("/analyze", start)
 
     if "type" not in result:
         result = {"type": "clarification", **result}
 
     logger.info("analyze result: %s", json.dumps(result, ensure_ascii=False))
+    record_analyze_log(body.question, body.context, result, latency_ms)
     return result

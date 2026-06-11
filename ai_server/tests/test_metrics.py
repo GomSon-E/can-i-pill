@@ -3,7 +3,7 @@ import json
 from fastapi.testclient import TestClient
 from google.genai import errors
 
-from app import metrics
+from app import analyze_logs, metrics
 from app.main import app
 from app.routers import ai
 
@@ -11,6 +11,11 @@ from app.routers import ai
 def _use_temp_metrics_csv(monkeypatch, tmp_path):
     metrics._METRICS_BUFFER.clear()
     monkeypatch.setenv("AI_METRICS_CSV_PATH", str(tmp_path / "metrics.csv"))
+
+
+def _use_temp_analyze_logs(monkeypatch, tmp_path):
+    analyze_logs._LOG_BUFFER.clear()
+    monkeypatch.setenv("AI_ANALYZE_LOGS_PATH", str(tmp_path / "analyze_logs.jsonl"))
 
 
 def test_record_metric_appends_to_buffer(monkeypatch, tmp_path):
@@ -65,6 +70,20 @@ def test_get_metrics_summary_aggregates_by_endpoint(monkeypatch, tmp_path):
     assert ocr["throughput_per_min"] == 1
 
 
+def test_get_recent_requests_orders_by_timestamp_desc_and_respects_limit(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
+
+    metrics.record_metric("/ocr", 200, 100.0, True)
+    metrics.record_metric("/label", 200, 200.0, True)
+    metrics.record_metric("/analyze", 200, 300.0, True)
+
+    recent = metrics.get_recent_requests(limit=2)
+
+    assert len(recent) == 2
+    assert recent[0]["endpoint"] == "/analyze"
+    assert recent[1]["endpoint"] == "/label"
+
+
 class _FakeResponse:
     def __init__(self, data):
         self.text = json.dumps(data)
@@ -94,6 +113,36 @@ def test_analyze_success_records_metric(monkeypatch, tmp_path):
     assert entry["endpoint"] == "/analyze"
     assert entry["status_code"] == 200
     assert entry["success"] is True
+
+
+def test_analyze_success_records_analyze_log(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
+    _use_temp_analyze_logs(monkeypatch, tmp_path)
+
+    def fake_run_agent(question, extra_context=""):
+        return {
+            "type": "analysis",
+            "level": "safe",
+            "doctorOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
+            "pharmacistOpinion": {"summary": "괜찮아요", "detail": "괜찮아요"},
+            "alternatives": [],
+            "trace": [{"action": "analyze", "args": {}, "observation": {"type": "analysis"}}],
+        }
+
+    monkeypatch.setattr(ai.harness, "run_agent", fake_run_agent)
+
+    client = TestClient(app)
+    response = client.post("/analyze", json={"question": "질문", "context": "컨텍스트"})
+
+    assert response.status_code == 200
+    assert len(analyze_logs._LOG_BUFFER) == 1
+    entry = analyze_logs._LOG_BUFFER[0]
+    assert entry["question"] == "질문"
+    assert entry["context"] == "컨텍스트"
+    assert entry["type"] == "analysis"
+    assert entry["level"] == "safe"
+    assert len(entry["trace"]) == 1
+    assert entry["latency_ms"] > 0
 
 
 def test_analyze_harness_error_result_records_success_metric(monkeypatch, tmp_path):

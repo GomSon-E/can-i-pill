@@ -113,3 +113,9 @@ def get_metrics_summary() -> dict:
         stats["max_latency_ms"] = max(latencies)
 
     return {"endpoints": endpoints}
+
+
+def get_recent_requests(limit: int = 50) -> list[dict]:
+    entries = _load_metrics_from_csv()
+    entries.sort(key=lambda e: e["timestamp"], reverse=True)
+    return entries[:limit]
