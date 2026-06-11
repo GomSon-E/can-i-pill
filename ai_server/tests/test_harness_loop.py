@@ -208,6 +208,79 @@ def test_run_agent_normalizes_error_action_without_type(monkeypatch):
     assert result["trace"][0]["observation"] == {"type": "error", "message": "실패"}
 
 
+def test_run_agent_falls_back_to_last_analyze_result_when_model_fails_to_call_finish(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("error", {"type": "error", "message": "모델이 도구 호출을 반환하지 않았습니다."}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    analysis_result = {
+        "level": "caution",
+        "doctorOpinion": {"summary": "요약", "detail": "상세"},
+        "pharmacistOpinion": {"summary": "요약", "detail": "상세"},
+        "alternatives": ["대체 식품"],
+    }
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return analysis_result
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+    monkeypatch.setattr(module, "evaluate", lambda result, question: (True, 100, []))
+
+    result = module.run_agent("홍삼 먹어도 되나요?")
+
+    assert result["type"] == "analysis"
+    assert result["level"] == "caution"
+    assert result["alternatives"] == ["대체 식품"]
+    assert [step["action"] for step in result["trace"]] == [
+        "validate_query", "gather_context", "analyze", "finish",
+    ]
+
+
+def test_run_agent_retries_once_when_model_returns_no_function_call_without_prior_analysis(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "오늘 날씨 어때?"}),
+        ("error", {"type": "error", "message": "모델이 도구 호출을 반환하지 않았습니다."}),
+        ("reject", {"reason": "이 질문은 서비스 범위를 벗어났습니다."}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": False, "is_clear": True, "items": [], "missing_info": []}
+        if name == "reject":
+            return {"type": "rejection", "message": args["reason"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    result = module.run_agent("오늘 날씨 어때?")
+
+    assert result["type"] == "rejection"
+    assert [step["action"] for step in result["trace"]] == ["validate_query", "reject"]
+
+
 def test_execute_tool_calls_matching_tool_function(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 

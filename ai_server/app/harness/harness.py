@@ -175,6 +175,16 @@ def _run_episode(messages, trace, state=None):
         action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
 
         if action_name == "error":
+            if last_analyze_result:
+                action_name, action_args = "finish", {"result": last_analyze_result}
+            else:
+                messages.append(
+                    "[System] 반드시 allowed_actions 중 하나를 함수 호출(function call)로 "
+                    "실행하세요. 텍스트로만 응답하지 마세요."
+                )
+                action_name, action_args = _call_with_tools(messages, TOOL_DECLARATIONS)
+
+        if action_name == "error":
             observation = {
                 "type": "error",
                 "message": action_args.get("message") or "하네스 실행 중 오류가 발생했습니다.",
