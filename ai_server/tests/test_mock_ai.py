@@ -1,7 +1,18 @@
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.harness import tools as harness_tools
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _registered_medication(monkeypatch):
+    monkeypatch.setattr(
+        harness_tools,
+        "_fetch_backend_data",
+        lambda: ([{"drugs": [{"name": "메트포르민"}]}], [], {}),
+    )
 
 
 def _assert_analysis_shape(entry):

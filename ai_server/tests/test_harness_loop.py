@@ -302,7 +302,7 @@ def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
         return "gather_context", {}
 
     def fake_execute_tool(name, args):
-        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
@@ -316,7 +316,7 @@ def test_run_agent_returns_error_when_max_steps_exceeded(monkeypatch):
         "action": "gather_context",
         "args": {},
         "observation": {
-            "drugs": [],
+            "drugs": ["와파린"],
             "supplements": [],
             "health_conditions": [],
             "allergies": [],
@@ -450,7 +450,7 @@ def test_run_agent_returns_analysis_for_clear_relevant_question(monkeypatch):
             "missing_info": [],
         },
         "gather_context": {
-            "drugs": [],
+            "drugs": ["와파린"],
             "supplements": [],
             "health_conditions": [],
             "allergies": [],
@@ -566,7 +566,7 @@ def test_run_agent_backfills_finish_result_with_missing_analyze_fields(monkeypat
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "analyze":
             return analyze_observation
         if name == "finish":
@@ -609,7 +609,7 @@ def test_run_agent_handles_finish_result_returned_as_json_string(monkeypatch):
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "analyze":
             return analyze_observation
         if name == "finish":
@@ -768,7 +768,7 @@ def test_run_agent_retries_analysis_after_failed_self_evaluation(monkeypatch):
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "analyze":
             return {}
         if name == "finish":
@@ -803,7 +803,7 @@ def test_run_episode_returns_finish_action_and_observation(monkeypatch):
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "analyze":
             return {"level": "safe", "doctorOpinion": {}, "pharmacistOpinion": {}, "alternatives": []}
         if name == "finish":
@@ -822,6 +822,72 @@ def test_run_episode_returns_finish_action_and_observation(monkeypatch):
     assert len(trace) == 4
 
 
+def test_run_episode_returns_registration_required_when_no_meds_registered(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    messages = ["initial"]
+    trace = []
+    action_name, observation = module._run_episode(messages, trace)
+
+    assert action_name == "registration_required"
+    assert observation["type"] == "registration_required"
+    assert "message" in observation
+    assert [step["action"] for step in trace] == ["validate_query", "gather_context"]
+
+
+def test_run_episode_proceeds_to_analyze_when_drugs_registered(monkeypatch):
+    module = importlib.import_module("app.harness.harness")
+
+    planned_actions = iter([
+        ("validate_query", {"question": "홍삼 먹어도 되나요?"}),
+        ("gather_context", {}),
+        ("analyze", {"question": "홍삼 먹어도 되나요?", "context": ""}),
+        ("finish", {"result": {"level": "safe"}}),
+    ])
+
+    def fake_call_with_tools(messages, declarations, client=None, model="gemini-3.1-flash-lite"):
+        return next(planned_actions)
+
+    def fake_execute_tool(name, args):
+        if name == "validate_query":
+            return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
+        if name == "gather_context":
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
+        if name == "analyze":
+            return {"level": "caution", "doctorOpinion": {}, "pharmacistOpinion": {}, "alternatives": []}
+        if name == "finish":
+            return {"type": "analysis", **args["result"]}
+        raise AssertionError(f"unexpected tool call: {name}")
+
+    monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
+    monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
+
+    messages = ["initial"]
+    trace = []
+    action_name, observation = module._run_episode(messages, trace)
+
+    assert action_name == "finish"
+    assert observation["type"] == "analysis"
+
+
 def test_run_episode_returns_error_when_max_steps_exceeded(monkeypatch):
     module = importlib.import_module("app.harness.harness")
 
@@ -829,7 +895,7 @@ def test_run_episode_returns_error_when_max_steps_exceeded(monkeypatch):
         return "gather_context", {}
 
     def fake_execute_tool(name, args):
-        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
 
     monkeypatch.setattr(module, "_call_with_tools", fake_call_with_tools)
     monkeypatch.setattr(module, "execute_tool", fake_execute_tool)
@@ -884,7 +950,7 @@ def test_run_agent_grants_fresh_max_steps_budget_on_self_evaluate_retry(monkeypa
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "analyze":
             return {}
         if name == "finish":
@@ -939,7 +1005,7 @@ def test_run_agent_skips_self_evaluate_when_max_steps_exceeded(monkeypatch):
         return "gather_context", {}
 
     def fake_execute_tool(name, args):
-        return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+        return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
 
     def fake_evaluate(observation, question):
         raise AssertionError("evaluate should not be called when max_steps is exceeded")
@@ -1010,7 +1076,7 @@ def test_run_agent_returns_items_and_aggregated_level_for_multi_item_question(mo
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "finish":
             return {"type": "analysis", **args["result"]}
         raise AssertionError(f"unexpected tool call: {name}")
@@ -1047,7 +1113,7 @@ def test_run_agent_returns_error_when_sub_agents_fail(monkeypatch):
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         raise AssertionError(f"unexpected tool call: {name}")
 
     def fake_run_sub_agents_sync(items, context):
@@ -1135,7 +1201,7 @@ def test_run_agent_reuses_validated_items_when_multi_item_retry_starts_with_anal
                 "missing_info": [],
             }
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "finish":
             return {"type": "analysis", **args["result"]}
         raise AssertionError(f"unexpected direct tool call: {name}")
@@ -1226,7 +1292,7 @@ def test_run_agent_self_evaluate_retry_message_includes_multi_item_names(monkeyp
         if name == "validate_query":
             return {"is_relevant": True, "is_clear": True, "items": ["홍삼", "비타민C"], "missing_info": []}
         if name == "gather_context":
-            return {"drugs": [], "supplements": [], "health_conditions": [], "allergies": []}
+            return {"drugs": ["와파린"], "supplements": [], "health_conditions": [], "allergies": []}
         if name == "finish":
             return {"type": "analysis", **args["result"]}
         raise AssertionError(f"unexpected direct tool call: {name}")

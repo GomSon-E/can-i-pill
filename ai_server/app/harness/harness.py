@@ -238,6 +238,15 @@ def _run_episode(messages, trace, state=None):
         messages.append(f"[Action] {action_name}({action_args})")
         messages.append(f"[Observation] {observation}")
 
+        if action_name == "gather_context" and not observation.get("drugs") and not observation.get("supplements"):
+            return "registration_required", {
+                "type": "registration_required",
+                "message": (
+                    "복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. "
+                    "'내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요."
+                ),
+            }
+
         if action_name == "validate_query":
             state["items"] = observation.get("items") or []
 
