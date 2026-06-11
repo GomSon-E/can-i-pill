@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import time
 from fastapi import APIRouter, File, UploadFile
 from pydantic import BaseModel
@@ -25,6 +26,7 @@ def _load_env():
 _load_env()
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 MODEL = "gemini-3.1-flash-lite"
@@ -218,4 +220,6 @@ async def analyze(body: AnalyzeRequest):
 
     if "type" not in result:
         result = {"type": "clarification", **result}
+
+    logger.info("analyze result: %s", json.dumps(result, ensure_ascii=False))
     return result

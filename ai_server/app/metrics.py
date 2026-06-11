@@ -1,27 +1,87 @@
+import csv
+import os
+import threading
 import time
 
 MAX_METRICS_BUFFER_SIZE = 1000
+CSV_FIELDS = ["timestamp", "endpoint", "status_code", "latency_ms", "success"]
 
 _METRICS_BUFFER = []
+_CSV_LOCK = threading.Lock()
+
+
+def _metrics_csv_path() -> str:
+    return os.getenv("AI_METRICS_CSV_PATH", os.path.join(os.getcwd(), "data", "metrics.csv"))
+
+
+def _ensure_metrics_csv(path: str) -> None:
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        with open(path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            writer.writeheader()
+
+
+def _append_metric_to_csv(entry: dict) -> None:
+    path = _metrics_csv_path()
+    with _CSV_LOCK:
+        _ensure_metrics_csv(path)
+        with open(path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+            writer.writerow({
+                "timestamp": entry["timestamp"],
+                "endpoint": entry["endpoint"],
+                "status_code": entry["status_code"],
+                "latency_ms": entry["latency_ms"],
+                "success": entry["success"],
+            })
+
+
+def _load_metrics_from_csv() -> list[dict]:
+    path = _metrics_csv_path()
+    if not os.path.exists(path):
+        return list(_METRICS_BUFFER)
+
+    entries = []
+    with _CSV_LOCK:
+        with open(path, newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                try:
+                    entries.append({
+                        "timestamp": float(row["timestamp"]),
+                        "endpoint": row["endpoint"],
+                        "status_code": int(row["status_code"]),
+                        "latency_ms": float(row["latency_ms"]),
+                        "success": row["success"] == "True",
+                    })
+                except (KeyError, TypeError, ValueError):
+                    continue
+    return entries
 
 
 def record_metric(endpoint: str, status_code: int, latency_ms: float, success: bool) -> None:
-    _METRICS_BUFFER.append({
+    entry = {
         "endpoint": endpoint,
         "status_code": status_code,
         "latency_ms": latency_ms,
         "success": success,
         "timestamp": time.time(),
-    })
+    }
+    _METRICS_BUFFER.append(entry)
     if len(_METRICS_BUFFER) > MAX_METRICS_BUFFER_SIZE:
         del _METRICS_BUFFER[: len(_METRICS_BUFFER) - MAX_METRICS_BUFFER_SIZE]
+    _append_metric_to_csv(entry)
 
 
 def get_metrics_summary() -> dict:
     now = time.time()
     endpoints = {}
 
-    for entry in _METRICS_BUFFER:
+    for entry in _load_metrics_from_csv():
         endpoint = entry["endpoint"]
         stats = endpoints.setdefault(endpoint, {
             "total": 0,

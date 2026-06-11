@@ -6,8 +6,9 @@ from app import metrics
 client = TestClient(app)
 
 
-def test_get_metrics_returns_summary_json():
+def test_get_metrics_returns_summary_json(monkeypatch, tmp_path):
     metrics._METRICS_BUFFER.clear()
+    monkeypatch.setenv("AI_METRICS_CSV_PATH", str(tmp_path / "metrics.csv"))
     metrics.record_metric("/analyze", 200, 100.0, True)
 
     response = client.get("/metrics")

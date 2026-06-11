@@ -1,5 +1,9 @@
+import logging
+
 from fastapi import FastAPI
 from app.routers import ai, metrics
+
+logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 

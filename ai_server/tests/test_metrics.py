@@ -8,8 +8,13 @@ from app.main import app
 from app.routers import ai
 
 
-def test_record_metric_appends_to_buffer():
+def _use_temp_metrics_csv(monkeypatch, tmp_path):
     metrics._METRICS_BUFFER.clear()
+    monkeypatch.setenv("AI_METRICS_CSV_PATH", str(tmp_path / "metrics.csv"))
+
+
+def test_record_metric_appends_to_buffer(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     metrics.record_metric("/analyze", 200, 123.4, True)
 
@@ -21,8 +26,22 @@ def test_record_metric_appends_to_buffer():
     assert entry["success"] is True
 
 
-def test_get_metrics_summary_aggregates_by_endpoint():
+def test_record_metric_persists_to_csv(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
+
+    metrics.record_metric("/analyze", 200, 123.4, True)
     metrics._METRICS_BUFFER.clear()
+
+    summary = metrics.get_metrics_summary()
+
+    analyze = summary["endpoints"]["/analyze"]
+    assert analyze["total"] == 1
+    assert analyze["success"] == 1
+    assert analyze["avg_latency_ms"] == 123.4
+
+
+def test_get_metrics_summary_aggregates_by_endpoint(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     metrics.record_metric("/analyze", 200, 100.0, True)
     metrics.record_metric("/analyze", 200, 200.0, True)
@@ -51,8 +70,8 @@ class _FakeResponse:
         self.text = json.dumps(data)
 
 
-def test_analyze_success_records_metric(monkeypatch):
-    metrics._METRICS_BUFFER.clear()
+def test_analyze_success_records_metric(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     def fake_run_agent(question, extra_context=""):
         return {
@@ -77,8 +96,8 @@ def test_analyze_success_records_metric(monkeypatch):
     assert entry["success"] is True
 
 
-def test_analyze_harness_error_result_records_success_metric(monkeypatch):
-    metrics._METRICS_BUFFER.clear()
+def test_analyze_harness_error_result_records_success_metric(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     def fake_run_agent(question, extra_context=""):
         return {"type": "error", "message": "모델이 도구 호출을 반환하지 않았습니다.", "trace": []}
@@ -97,8 +116,8 @@ def test_analyze_harness_error_result_records_success_metric(monkeypatch):
     assert entry["success"] is True
 
 
-def test_analyze_sub_agent_error_result_records_success_metric(monkeypatch):
-    metrics._METRICS_BUFFER.clear()
+def test_analyze_sub_agent_error_result_records_success_metric(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     def fake_run_agent(question, extra_context=""):
         return {
@@ -121,8 +140,8 @@ def test_analyze_sub_agent_error_result_records_success_metric(monkeypatch):
     assert entry["success"] is True
 
 
-def test_analyze_failure_records_metric_with_api_error_code(monkeypatch):
-    metrics._METRICS_BUFFER.clear()
+def test_analyze_failure_records_metric_with_api_error_code(monkeypatch, tmp_path):
+    _use_temp_metrics_csv(monkeypatch, tmp_path)
 
     def fake_run_agent(question, extra_context=""):
         raise errors.APIError(503, {"error": {"message": "unavailable", "status": "UNAVAILABLE"}})
