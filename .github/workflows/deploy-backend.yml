@@ -1,0 +1,63 @@
+name: Deploy backend
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+      - ".github/workflows/deploy-backend.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write runtime env
+        run: |
+          cat > backend/.env <<'EOF'
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
+          AI_SERVER_URL=${{ secrets.AI_SERVER_INTERNAL_URL }}
+          EOF
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.GCP_BACKEND_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Upload backend
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.GCP_BACKEND_USER }}@${{ secrets.GCP_BACKEND_HOST }}" \
+            "mkdir -p ~/can-i-pill/backend"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            backend/ "${{ secrets.GCP_BACKEND_USER }}@${{ secrets.GCP_BACKEND_HOST }}:~/can-i-pill/backend/"
+
+      - name: Build and restart backend container
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.GCP_BACKEND_USER }}@${{ secrets.GCP_BACKEND_HOST }}" <<'EOF'
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+          fi
+          sudo systemctl enable --now docker
+          cd ~/can-i-pill/backend
+          sudo docker build -t can-i-pill-backend .
+          sudo docker rm -f backend >/dev/null 2>&1 || true
+          sudo docker run -d \
+            --restart unless-stopped \
+            --name backend \
+            -p 8000:8000 \
+            --env-file .env \
+            can-i-pill-backend
+          curl -fsS http://localhost:8000/health
+          EOF

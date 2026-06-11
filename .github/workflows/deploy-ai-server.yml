@@ -1,0 +1,62 @@
+name: Deploy AI server
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "ai_server/**"
+      - ".github/workflows/deploy-ai-server.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write runtime env
+        run: |
+          cat > ai_server/.env <<'EOF'
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          BACKEND_URL=http://10.178.0.4:8000
+          EOF
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.GCP_AI_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Upload AI server
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.GCP_AI_USER }}@${{ secrets.GCP_AI_HOST }}" \
+            "mkdir -p ~/can-i-pill/ai_server"
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            ai_server/ "${{ secrets.GCP_AI_USER }}@${{ secrets.GCP_AI_HOST }}:~/can-i-pill/ai_server/"
+
+      - name: Build and restart AI container
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.GCP_AI_USER }}@${{ secrets.GCP_AI_HOST }}" <<'EOF'
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y docker.io
+          fi
+          sudo systemctl enable --now docker
+          cd ~/can-i-pill/ai_server
+          sudo docker build -t can-i-pill-ai .
+          sudo docker rm -f ai-server >/dev/null 2>&1 || true
+          sudo docker run -d \
+            --restart unless-stopped \
+            --name ai-server \
+            -p 8001:8001 \
+            --env-file .env \
+            can-i-pill-ai
+          curl -fsS http://localhost:8001/health
+          EOF
