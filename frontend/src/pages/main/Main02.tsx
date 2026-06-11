@@ -134,27 +134,34 @@ export default function Main02() {
         </div>
       )}
 
-      {(analyzeStore.responseType === 'rejection' || analyzeStore.responseType === 'error') && analyzeStore.message && (
-        <div style={{
-          position: 'fixed',
-          top: 60,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          backgroundColor: '#1A1B22',
-          color: '#fff',
-          borderRadius: 10,
-          padding: '10px 18px',
-          fontSize: 14,
-          fontWeight: 500,
-          zIndex: 100,
-          whiteSpace: 'nowrap',
-        }}>
-          {analyzeStore.message}
-        </div>
-      )}
-
       {/* 스크롤 영역 */}
       <div style={{ flex: 1, overflowY: 'auto', paddingLeft: 22, paddingRight: 22, paddingTop: 21 }}>
+        {(analyzeStore.responseType === 'rejection' || analyzeStore.responseType === 'error' || analyzeStore.responseType === 'registration_required') && analyzeStore.message && (
+          <div style={{
+            backgroundColor: '#FDF2F5',
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 13,
+            color: '#E91E63',
+            lineHeight: 1.6,
+            marginBottom: 16,
+          }}>
+            {analyzeStore.message}
+          </div>
+        )}
+        {analyzeStore.responseType === 'clarification' && analyzeStore.clarificationPrompt && (
+          <div style={{
+            backgroundColor: '#FDF2F5',
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 13,
+            color: '#E91E63',
+            lineHeight: 1.6,
+            marginBottom: 16,
+          }}>
+            {analyzeStore.clarificationPrompt}
+          </div>
+        )}
         <h2 style={{ fontSize: 21, fontWeight: 800, color: '#1A1B22', margin: '0 0 14px' }}>
           먹어도 될지 물어보세요
         </h2>
@@ -184,19 +191,6 @@ export default function Main02() {
         </div>
 
         {/* 텍스트 입력 영역 */}
-        {analyzeStore.responseType === 'clarification' && analyzeStore.clarificationPrompt && (
-          <div style={{
-            backgroundColor: '#FDF2F5',
-            borderRadius: 10,
-            padding: '10px 14px',
-            fontSize: 13,
-            color: '#E91E63',
-            lineHeight: 1.6,
-            marginBottom: 10,
-          }}>
-            {analyzeStore.clarificationPrompt}
-          </div>
-        )}
         <div style={{
           border: '1.5px solid #E4E5E9',
           borderRadius: 16,

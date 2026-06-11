@@ -312,6 +312,20 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     expect(analyzeStore.clarificationPrompt).toBe('섭취하려는 항목을 알려주세요.')
   })
 
+  it('응답 type이 clarification이지만 clarification_prompt가 없으면 기본 안내 문구를 저장', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'clarification' }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('clarification')
+    expect(analyzeStore.clarificationPrompt).toBeTruthy()
+  })
+
   it('응답 type이 rejection이면 message 저장 후 MAIN-02로 복귀', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
@@ -339,6 +353,20 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     expect(analyzeStore.responseType).toBe('error')
     expect(analyzeStore.message).toBe('분석 한도 초과')
   })
+
+  it('응답 type이 registration_required이면 message 저장 후 MAIN-02로 복귀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'registration_required', message: "복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요." }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('registration_required')
+    expect(analyzeStore.message).toBe("복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요.")
+  })
 })
 
 // ─── S-13b: MAIN-02 — 분석 응답 type별 안내 표시 ───────────────────────────
@@ -359,7 +387,26 @@ describe('S-13b: MAIN-02 — clarification 힌트 / rejection·error 토스트',
     expect(screen.getByText('섭취하려는 항목을 알려주세요.')).toBeInTheDocument()
   })
 
-  it('responseType이 rejection이면 message 토스트 표시', async () => {
+  it('clarification 힌트도 rejection/error/registration_required 메시지와 동일하게 헤더 위쪽에 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'clarification'
+    analyzeStore.clarificationPrompt = '섭취하려는 항목을 알려주세요.'
+    renderPage('/main-02')
+    const hint = screen.getByText('섭취하려는 항목을 알려주세요.')
+    const heading = screen.getByText('먹어도 될지 물어보세요')
+    expect(hint.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('clarification인데 clarificationPrompt가 비어있으면 기본 안내 문구 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    const { DEFAULT_CLARIFICATION_PROMPT } = await import('../pages/main/Main04')
+    analyzeStore.responseType = 'clarification'
+    analyzeStore.clarificationPrompt = DEFAULT_CLARIFICATION_PROMPT
+    renderPage('/main-02')
+    expect(screen.getByText(DEFAULT_CLARIFICATION_PROMPT)).toBeInTheDocument()
+  })
+
+  it('responseType이 rejection이면 message 표시', async () => {
     const { analyzeStore } = await import('../store/analyzeStore')
     analyzeStore.responseType = 'rejection'
     analyzeStore.message = '이 질문은 서비스 범위를 벗어났습니다.'
@@ -367,12 +414,30 @@ describe('S-13b: MAIN-02 — clarification 힌트 / rejection·error 토스트',
     expect(screen.getByText('이 질문은 서비스 범위를 벗어났습니다.')).toBeInTheDocument()
   })
 
-  it('responseType이 error이면 message 토스트 표시', async () => {
+  it('responseType이 error이면 message 표시', async () => {
     const { analyzeStore } = await import('../store/analyzeStore')
     analyzeStore.responseType = 'error'
     analyzeStore.message = '분석 한도 초과'
     renderPage('/main-02')
     expect(screen.getByText('분석 한도 초과')).toBeInTheDocument()
+  })
+
+  it('responseType이 registration_required이면 message 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'registration_required'
+    analyzeStore.message = "복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요."
+    renderPage('/main-02')
+    expect(screen.getByText("복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요.")).toBeInTheDocument()
+  })
+
+  it('rejection/error 메시지는 고정 토스트가 아닌, 줄바꿈되는 화면 내 박스로 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'rejection'
+    analyzeStore.message = '이 질문은 약물, 영양제, 음식 간의 상호작용과 관련이 없으므로 답변할 수 없습니다.'
+    renderPage('/main-02')
+    const el = screen.getByText('이 질문은 약물, 영양제, 음식 간의 상호작용과 관련이 없으므로 답변할 수 없습니다.')
+    expect(el).not.toHaveStyle({ position: 'fixed' })
+    expect(el).not.toHaveStyle({ whiteSpace: 'nowrap' })
   })
 })
 

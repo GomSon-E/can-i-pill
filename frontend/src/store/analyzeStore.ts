@@ -26,7 +26,7 @@ export interface AnalyzeResult {
   items?: AnalyzeItem[]
 }
 
-export type AnalyzeResponseType = 'analysis' | 'clarification' | 'rejection' | 'error' | null
+export type AnalyzeResponseType = 'analysis' | 'clarification' | 'rejection' | 'error' | 'registration_required' | null
 
 export const analyzeStore: {
   question: string
