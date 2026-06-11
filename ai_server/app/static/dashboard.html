@@ -4,83 +4,319 @@
 <meta charset="utf-8">
 <title>AI 서버 모니터링 대시보드</title>
 <style>
-  body { font-family: sans-serif; margin: 24px; background: #f5f5f5; }
-  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; background: #fff; }
-  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 14px; }
-  th { background: #eee; }
-  .bar-track { background: #eee; border-radius: 4px; overflow: hidden; height: 16px; width: 100%; }
-  .bar-fill { background: #4caf50; height: 100%; }
-  .bar-fill.error { background: #e53935; }
-  h2 { margin-top: 32px; }
+  :root {
+    --bg: #F8F8FA;
+    --card-bg: #ffffff;
+    --text: #1A1B22;
+    --muted: #8B8C96;
+    --primary: #E91E63;
+    --primary-dark: #B1174B;
+    --primary-light: #FDF2F5;
+    --success: #388E3C;
+    --success-light: #E8F5E9;
+    --danger: #C62828;
+    --danger-light: #FFEBEE;
+    --border: #E4E5E9;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    margin: 0;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  h1 {
+    margin: 0 0 20px;
+    font-size: 22px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  h3 { margin: 16px 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-button {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 10px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border-bottom: 2px solid transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .tab-button:hover {
+    color: var(--primary-dark);
+    background: var(--primary-light);
+  }
+
+  .tab-button.active {
+    color: var(--primary);
+    background: var(--primary-light);
+    border-bottom-color: var(--primary);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 16px;
+  }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-top: 3px solid var(--primary);
+    padding: 16px 20px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .stat-row:last-of-type { border-bottom: none; }
+  .stat-row .label { color: var(--muted); }
+  .stat-row .value { font-weight: 600; }
+
+  .bar-track { background: var(--primary-light); border-radius: 4px; overflow: hidden; height: 10px; width: 100%; margin-top: 4px; }
+  .bar-fill { background: var(--primary); height: 100%; }
+  .bar-fill.error { background: var(--danger); }
+
+  table { border-collapse: collapse; width: 100%; background: var(--card-bg); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  th, td { padding: 10px 12px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border); }
+  th { background: var(--primary-light); color: var(--primary-dark); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--primary-light); }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: var(--muted);
+  }
+  .badge.success { background: var(--success); }
+  .badge.error { background: var(--danger); }
+  .badge.type { background: var(--primary); }
+
+  .log-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border-left: 3px solid var(--primary);
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .log-card .meta { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .log-card .timestamp { color: var(--muted); font-size: 12px; }
+  .log-card .question { font-size: 14px; margin: 6px 0; }
+  .log-card details { margin-top: 8px; }
+  .log-card summary { cursor: pointer; color: var(--primary); font-size: 13px; font-weight: 600; }
+  .log-card pre {
+    background: var(--primary-light);
+    border-radius: 8px;
+    padding: 10px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+
+  .empty { color: var(--muted); font-size: 14px; padding: 16px; }
 </style>
 </head>
 <body>
 <h1>AI 서버 모니터링 대시보드</h1>
-<div id="endpoints"></div>
+
+<div class="tabs">
+  <button class="tab-button active" data-tab="stats">통계</button>
+  <button class="tab-button" data-tab="requests">최근 요청</button>
+  <button class="tab-button" data-tab="logs">로그</button>
+</div>
+
+<div id="stats" class="tab-panel active">
+  <div id="endpoints" class="card-grid"></div>
+</div>
+
+<div id="requests" class="tab-panel">
+  <table id="requests-table">
+    <thead>
+      <tr>
+        <th>시간</th>
+        <th>엔드포인트</th>
+        <th>상태코드</th>
+        <th>지연시간</th>
+        <th>결과</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div id="logs" class="tab-panel">
+  <div id="analyze-logs"></div>
+</div>
 
 <script>
-async function refresh() {
+function formatSeconds(ms) {
+  return (ms / 1000).toFixed(2) + 's';
+}
+
+function formatTimestamp(ts) {
+  return new Date(ts * 1000).toLocaleString('ko-KR');
+}
+
+document.querySelectorAll('.tab-button').forEach((button) => {
+  button.addEventListener('click', () => {
+    document.querySelectorAll('.tab-button').forEach((b) => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach((p) => p.classList.remove('active'));
+    button.classList.add('active');
+    document.getElementById(button.dataset.tab).classList.add('active');
+  });
+});
+
+async function refreshStats() {
   const res = await fetch('/metrics');
   const data = await res.json();
   const container = document.getElementById('endpoints');
   container.innerHTML = '';
 
   for (const [endpoint, stats] of Object.entries(data.endpoints || {})) {
-    const section = document.createElement('div');
+    const card = document.createElement('div');
+    card.className = 'card';
 
-    const title = document.createElement('h2');
-    title.textContent = endpoint;
-    section.appendChild(title);
-
-    const table = document.createElement('table');
     const successRatio = stats.total > 0 ? (stats.success / stats.total) * 100 : 0;
 
-    table.innerHTML = `
-      <tr><th>총 요청 수</th><td>${stats.total}</td></tr>
-      <tr><th>성공</th><td>${stats.success}</td></tr>
-      <tr><th>실패</th><td>${stats.failure}</td></tr>
-      <tr><th>평균 지연시간 (ms)</th><td>${stats.avg_latency_ms.toFixed(1)}</td></tr>
-      <tr><th>최소 지연시간 (ms)</th><td>${stats.min_latency_ms.toFixed(1)}</td></tr>
-      <tr><th>최대 지연시간 (ms)</th><td>${stats.max_latency_ms.toFixed(1)}</td></tr>
-      <tr><th>최근 1분 처리량 (req/min)</th><td>${stats.throughput_per_min}</td></tr>
-      <tr>
-        <th>성공률</th>
-        <td>
-          <div class="bar-track">
-            <div class="bar-fill" style="width: ${successRatio}%"></div>
-          </div>
-        </td>
-      </tr>
+    card.innerHTML = `
+      <h2>${endpoint}</h2>
+      <div class="stat-row"><span class="label">총 요청 수</span><span class="value">${stats.total}</span></div>
+      <div class="stat-row"><span class="label">성공</span><span class="value">${stats.success}</span></div>
+      <div class="stat-row"><span class="label">실패</span><span class="value">${stats.failure}</span></div>
+      <div class="stat-row"><span class="label">평균 지연시간</span><span class="value">${formatSeconds(stats.avg_latency_ms)}</span></div>
+      <div class="stat-row"><span class="label">최소 지연시간</span><span class="value">${formatSeconds(stats.min_latency_ms)}</span></div>
+      <div class="stat-row"><span class="label">최대 지연시간</span><span class="value">${formatSeconds(stats.max_latency_ms)}</span></div>
+      <div class="stat-row"><span class="label">최근 1분 처리량</span><span class="value">${stats.throughput_per_min} req/min</span></div>
+      <div class="stat-row">
+        <span class="label">성공률</span>
+        <span class="value">${successRatio.toFixed(1)}%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width: ${successRatio}%"></div></div>
+      <h3>status_code별 분포</h3>
     `;
-    section.appendChild(table);
 
-    const errorTitle = document.createElement('h3');
-    errorTitle.textContent = 'status_code별 에러 분포';
-    section.appendChild(errorTitle);
-
-    const errorTable = document.createElement('table');
     const total = stats.total || 1;
-    let rows = '';
     for (const [code, count] of Object.entries(stats.status_codes || {})) {
       const ratio = (count / total) * 100;
       const isError = code !== '200';
-      rows += `
-        <tr>
-          <th>${code}</th>
-          <td>${count}</td>
-          <td>
-            <div class="bar-track">
-              <div class="bar-fill ${isError ? 'error' : ''}" style="width: ${ratio}%"></div>
-            </div>
-          </td>
-        </tr>
-      `;
+      const row = document.createElement('div');
+      row.className = 'stat-row';
+      row.innerHTML = `<span class="label">${code} (${count})</span><span class="value"></span>`;
+      const track = document.createElement('div');
+      track.className = 'bar-track';
+      track.innerHTML = `<div class="bar-fill ${isError ? 'error' : ''}" style="width: ${ratio}%"></div>`;
+      card.appendChild(row);
+      card.appendChild(track);
     }
-    errorTable.innerHTML = rows;
-    section.appendChild(errorTable);
 
-    container.appendChild(section);
+    container.appendChild(card);
   }
+
+  if (!Object.keys(data.endpoints || {}).length) {
+    container.innerHTML = '<div class="empty">아직 수집된 메트릭이 없습니다.</div>';
+  }
+}
+
+async function refreshRequests() {
+  const res = await fetch('/logs/requests');
+  const data = await res.json();
+  const tbody = document.querySelector('#requests-table tbody');
+  tbody.innerHTML = '';
+
+  for (const entry of data.requests || []) {
+    const tr = document.createElement('tr');
+    const statusClass = entry.status_code === 200 ? 'success' : 'error';
+    const resultClass = entry.success ? 'success' : 'error';
+    const resultLabel = entry.success ? '성공' : '실패';
+    tr.innerHTML = `
+      <td>${formatTimestamp(entry.timestamp)}</td>
+      <td>${entry.endpoint}</td>
+      <td><span class="badge ${statusClass}">${entry.status_code}</span></td>
+      <td>${formatSeconds(entry.latency_ms)}</td>
+      <td><span class="badge ${resultClass}">${resultLabel}</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  if (!(data.requests || []).length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">아직 요청 내역이 없습니다.</td></tr>';
+  }
+}
+
+async function refreshAnalyzeLogs() {
+  const res = await fetch('/logs/analyze');
+  const data = await res.json();
+  const container = document.getElementById('analyze-logs');
+  container.innerHTML = '';
+
+  for (const entry of data.logs || []) {
+    const card = document.createElement('div');
+    card.className = 'log-card';
+
+    const question = (entry.question || '').length > 80
+      ? entry.question.slice(0, 80) + '…'
+      : (entry.question || '');
+
+    card.innerHTML = `
+      <div class="meta">
+        <span class="timestamp">${formatTimestamp(entry.timestamp)}</span>
+        <span class="badge type">${entry.type || '-'}</span>
+        ${entry.level ? `<span class="badge">${entry.level}</span>` : ''}
+        <span class="badge">${formatSeconds(entry.latency_ms)}</span>
+      </div>
+      <div class="question">${question}</div>
+      <details>
+        <summary>trace 보기 (${(entry.trace || []).length}건)</summary>
+        <pre>${JSON.stringify(entry.trace || [], null, 2)}</pre>
+      </details>
+    `;
+    container.appendChild(card);
+  }
+
+  if (!(data.logs || []).length) {
+    container.innerHTML = '<div class="empty">아직 analyze 로그가 없습니다.</div>';
+  }
+}
+
+function refresh() {
+  refreshStats();
+  refreshRequests();
+  refreshAnalyzeLogs();
 }
 
 refresh();
