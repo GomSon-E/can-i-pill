@@ -26,6 +26,11 @@ def _generate_validation(question: str) -> dict:
     prompt = (
         "약, 영양제, 음식 상호작용 분석 서비스의 질문인지 검증하세요. "
         "반드시 JSON으로만 답하세요.\n"
+        "is_clear 판단 기준: 이 서비스는 사용자가 등록해 둔 복용 약물·영양제 정보를 "
+        "자동으로 조회해 비교 대상으로 사용합니다. 따라서 질문 자체에 비교 대상 약물/영양제 "
+        "이름이 명시되어 있지 않더라도, '내가 먹는 약/영양제와 같이 먹어도 되는지'를 묻는 "
+        "의도가 분명하면 is_clear=true로 판단하세요. is_clear=false는 질문이 무엇을 "
+        "묻는지(섭취하려는 항목 자체)조차 알 수 없을 때만 사용하세요.\n"
         f"질문: {question}"
     )
     response = _client.models.generate_content(

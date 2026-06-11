@@ -70,6 +70,34 @@ def test_validate_query_marks_named_supplement_question_as_clear(monkeypatch):
     assert result["items"] == ["홍삼"]
 
 
+def test_generate_validation_prompt_treats_implicit_registered_items_as_clear(monkeypatch):
+    module = importlib.import_module("app.harness.tools")
+    from app.routers import ai
+
+    captured = {}
+    validation_response = {
+        "is_relevant": True,
+        "is_clear": True,
+        "items": ["홍삼"],
+        "missing_info": [],
+    }
+
+    class _FakeResponse:
+        text = json.dumps(validation_response)
+
+    def fake_generate_content(**kwargs):
+        captured.update(kwargs)
+        return _FakeResponse()
+
+    monkeypatch.setattr(ai._client.models, "generate_content", fake_generate_content)
+
+    module._generate_validation("홍삼 먹어도 되나요?")
+
+    prompt = captured["contents"]
+    assert "등록" in prompt
+    assert "is_clear" in prompt
+
+
 def test_gather_context_returns_empty_lists_when_backend_has_no_data(monkeypatch):
     module = importlib.import_module("app.harness.tools")
 
