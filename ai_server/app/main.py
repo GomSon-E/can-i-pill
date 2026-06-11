@@ -1,7 +1,7 @@
 import logging
 
 from fastapi import FastAPI
-from app.routers import ai, metrics
+from app.routers import ai, logs, metrics
 
 logging.basicConfig(level=logging.INFO)
 
@@ -15,3 +15,4 @@ def health():
 
 app.include_router(ai.router)
 app.include_router(metrics.router)
+app.include_router(logs.router)
