@@ -195,6 +195,8 @@ def _normalize_label_result(data: dict) -> dict:
 
 @router.post("/label")
 async def label(image: UploadFile = File(...)):
+    if AI_MOCK_MODE:
+        return MOCK_LABEL_RESPONSE
     image_bytes = await image.read()
     start = time.monotonic()
     try:
