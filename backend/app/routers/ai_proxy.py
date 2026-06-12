@@ -1,7 +1,7 @@
 import os
 import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -34,6 +34,18 @@ async def _post_to_ai_server(path: str, *, timeout=None, **kwargs) -> httpx.Resp
         ) from exc
 
 
+async def _get_from_ai_server(path: str, *, timeout=None, **kwargs) -> httpx.Response:
+    client_kwargs = {"timeout": timeout} if timeout is not None else {}
+    try:
+        async with _make_client(**client_kwargs) as client:
+            return await client.get(f"{AI_SERVER_URL}{path}", **kwargs)
+    except httpx.RequestError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI server connection failed: {exc}",
+        ) from exc
+
+
 @router.post("/ocr")
 async def ocr(image: UploadFile = File(...)):
     response = await _post_to_ai_server(
@@ -59,4 +71,28 @@ async def analyze(body: AnalyzeRequest):
         json={"question": body.question, "context": body.context},
         timeout=ANALYZE_TIMEOUT,
     )
+    return JSONResponse(content=response.json(), status_code=response.status_code)
+
+
+@router.get("/dashboard")
+async def dashboard():
+    response = await _get_from_ai_server("/dashboard")
+    return HTMLResponse(content=response.content, status_code=response.status_code)
+
+
+@router.get("/metrics")
+async def metrics():
+    response = await _get_from_ai_server("/metrics")
+    return JSONResponse(content=response.json(), status_code=response.status_code)
+
+
+@router.get("/logs/requests")
+async def logs_requests(limit: int = 50):
+    response = await _get_from_ai_server("/logs/requests", params={"limit": limit})
+    return JSONResponse(content=response.json(), status_code=response.status_code)
+
+
+@router.get("/logs/analyze")
+async def logs_analyze(limit: int = 50):
+    response = await _get_from_ai_server("/logs/analyze", params={"limit": limit})
     return JSONResponse(content=response.json(), status_code=response.status_code)

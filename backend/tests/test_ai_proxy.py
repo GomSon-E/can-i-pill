@@ -19,6 +19,22 @@ def make_httpx_response(json_data: dict, status_code: int = 200):
     return response
 
 
+def make_httpx_html_response(html: str, status_code: int = 200):
+    response = MagicMock(spec=httpx.Response)
+    response.status_code = status_code
+    response.content = html.encode()
+    response.headers = {"content-type": "text/html"}
+    return response
+
+
+def patched_get_client(mock_response):
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    mock_client.get = AsyncMock(return_value=mock_response)
+    return mock_client
+
+
 class TestOcrProxy:
     def test_ocr_proxy_forwards_to_ai_server(self):
         mock_response = make_httpx_response({"name": "처방전", "drugs": []})
@@ -193,3 +209,92 @@ class TestAnalyzeProxy:
 
         _, kwargs = mock_client_cls.call_args
         assert kwargs["timeout"] == pytest.approx(120.0)
+
+
+class TestDashboardProxy:
+    def test_dashboard_proxy_forwards_to_ai_server(self):
+        mock_response = make_httpx_html_response("<html><body>대시보드</body></html>")
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value = patched_get_client(mock_response)
+
+            response = client.get("/dashboard")
+
+        assert response.status_code == 200
+        assert "대시보드" in response.text
+
+    def test_dashboard_returns_502_when_ai_server_unreachable(self):
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.get = AsyncMock(side_effect=httpx.ConnectError("name resolution failed"))
+            mock_client_cls.return_value = mock_client
+
+            response = client.get("/dashboard")
+
+        assert response.status_code == 502
+
+
+class TestMetricsProxy:
+    def test_metrics_proxy_forwards_to_ai_server(self):
+        expected = {"endpoints": {"/ocr": {"total": 10, "success": 9, "failure": 1}}}
+        mock_response = make_httpx_response(expected)
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value = patched_get_client(mock_response)
+
+            response = client.get("/metrics")
+
+        assert response.status_code == 200
+        assert response.json() == expected
+
+
+class TestLogsProxy:
+    def test_logs_requests_proxy_forwards_to_ai_server(self):
+        expected = {"requests": [{"endpoint": "/ocr", "status": "success"}]}
+        mock_response = make_httpx_response(expected)
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value = patched_get_client(mock_response)
+
+            response = client.get("/logs/requests")
+
+        assert response.status_code == 200
+        assert response.json() == expected
+
+    def test_logs_requests_proxy_forwards_limit_query_param(self):
+        mock_response = make_httpx_response({"requests": []})
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client = patched_get_client(mock_response)
+            mock_client_cls.return_value = mock_client
+
+            client.get("/logs/requests?limit=10")
+
+        _, kwargs = mock_client.get.call_args
+        assert kwargs["params"] == {"limit": 10}
+
+    def test_logs_analyze_proxy_forwards_to_ai_server(self):
+        expected = {"logs": [{"question": "아스피린과 커피"}]}
+        mock_response = make_httpx_response(expected)
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client_cls.return_value = patched_get_client(mock_response)
+
+            response = client.get("/logs/analyze")
+
+        assert response.status_code == 200
+        assert response.json() == expected
+
+    def test_logs_analyze_proxy_forwards_limit_query_param(self):
+        mock_response = make_httpx_response({"logs": []})
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client = patched_get_client(mock_response)
+            mock_client_cls.return_value = mock_client
+
+            client.get("/logs/analyze?limit=5")
+
+        _, kwargs = mock_client.get.call_args
+        assert kwargs["params"] == {"limit": 5}
