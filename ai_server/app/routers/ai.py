@@ -1,3 +1,5 @@
+import asyncio
+import functools
 import os
 import json
 import logging
@@ -8,7 +10,7 @@ from google import genai
 from google.genai import types
 
 from app.analyze_logs import record_analyze_log
-from app.concurrency import GEMINI_SEMAPHORE
+from app.concurrency import GEMINI_EXECUTOR, GEMINI_SEMAPHORE
 from app.metrics import record_metric
 from app.harness import harness
 from app.mock_responses import MOCK_OCR_RESPONSE, MOCK_LABEL_RESPONSE, MOCK_ANALYZE_RESPONSE
@@ -88,13 +90,17 @@ async def ocr(image: UploadFile = File(...)):
     start = time.monotonic()
     try:
         async with GEMINI_SEMAPHORE:
-            response = _client.models.generate_content(
-                model=MODEL,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-                    _OCR_PROMPT,
-                ],
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            response = await asyncio.get_running_loop().run_in_executor(
+                GEMINI_EXECUTOR,
+                functools.partial(
+                    _client.models.generate_content,
+                    model=MODEL,
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
+                        _OCR_PROMPT,
+                    ],
+                    config=types.GenerateContentConfig(response_mime_type="application/json"),
+                ),
             )
     except Exception as e:
         _record_gemini_metric("/ocr", start, e)
@@ -201,15 +207,19 @@ async def label(image: UploadFile = File(...)):
     start = time.monotonic()
     try:
         async with GEMINI_SEMAPHORE:
-            response = _client.models.generate_content(
-                model=MODEL,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
-                    _LABEL_PROMPT,
-                ],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=_LABEL_SCHEMA,
+            response = await asyncio.get_running_loop().run_in_executor(
+                GEMINI_EXECUTOR,
+                functools.partial(
+                    _client.models.generate_content,
+                    model=MODEL,
+                    contents=[
+                        types.Part.from_bytes(data=image_bytes, mime_type=image.content_type or "image/jpeg"),
+                        _LABEL_PROMPT,
+                    ],
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=_LABEL_SCHEMA,
+                    ),
                 ),
             )
     except Exception as e:
@@ -226,7 +236,9 @@ async def analyze(body: AnalyzeRequest):
     start = time.monotonic()
     try:
         async with GEMINI_SEMAPHORE:
-            result = harness.run_agent(body.question, body.context)
+            result = await asyncio.get_running_loop().run_in_executor(
+                GEMINI_EXECUTOR, harness.run_agent, body.question, body.context
+            )
     except Exception as e:
         _record_gemini_metric("/analyze", start, e)
         raise
