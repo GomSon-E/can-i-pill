@@ -11,7 +11,11 @@ on:
       - ".github/workflows/deploy-ai-server.yml"
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci-tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
