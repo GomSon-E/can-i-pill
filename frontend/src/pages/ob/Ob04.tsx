@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ocrStore } from '../../store/ocrStore'
 import type { OcrDrug } from '../../store/ocrStore'
@@ -10,16 +10,11 @@ interface DrugItem extends OcrDrug {
 
 export default function Ob04() {
   const navigate = useNavigate()
-  const [prescriptionName, setPrescriptionName] = useState('')
-  const [drugs, setDrugs] = useState<DrugItem[]>([])
+  const [prescriptionName, setPrescriptionName] = useState(() => ocrStore.result?.name ?? '')
+  const [drugs, setDrugs] = useState<DrugItem[]>(() =>
+    ocrStore.result ? ocrStore.result.drugs.map((d, i) => ({ ...d, id: i })) : []
+  )
   const [toast, setToast] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (ocrStore.result) {
-      setPrescriptionName(ocrStore.result.name)
-      setDrugs(ocrStore.result.drugs.map((d, i) => ({ ...d, id: i })))
-    }
-  }, [])
 
   function handleDelete(id: number) {
     setDrugs(prev => prev.filter(d => d.id !== id))

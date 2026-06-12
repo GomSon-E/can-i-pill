@@ -8,6 +8,12 @@ interface Supplement {
   ingredients: string[]
 }
 
+interface LabelNutrient {
+  ingredient: string
+  amount: string
+  unit: string
+}
+
 let nextId = 1
 
 export default function Sub08() {
@@ -43,7 +49,7 @@ export default function Sub08() {
         showError('영양제 정보를 읽지 못했어요. 라벨이 잘 보이는지 확인해주세요')
         return
       }
-      const ingredients = data.nutrients?.map((n: any) => `${n.ingredient} ${n.amount}${n.unit}`) ?? []
+      const ingredients = data.nutrients?.map((n: LabelNutrient) => `${n.ingredient} ${n.amount}${n.unit}`) ?? []
       setSupplements(prev => [...prev, { id: nextId++, name: data.name, ingredients }])
     } catch (e) {
       console.error('label fetch error:', e)

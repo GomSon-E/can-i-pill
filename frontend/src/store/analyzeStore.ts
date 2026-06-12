@@ -41,3 +41,8 @@ export const analyzeStore: {
   message: null,
   clarificationPrompt: null,
 }
+
+export function setAnalyzeFromHistory(question: string, result: AnalyzeResult) {
+  analyzeStore.question = question
+  analyzeStore.result = result
+}
