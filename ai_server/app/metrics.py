@@ -115,7 +115,11 @@ def get_metrics_summary() -> dict:
     return {"endpoints": endpoints}
 
 
-def get_recent_requests(limit: int = 50) -> list[dict]:
+def get_recent_requests(limit: int = 50, offset: int = 0) -> list[dict]:
     entries = _load_metrics_from_csv()
     entries.sort(key=lambda e: e["timestamp"], reverse=True)
-    return entries[:limit]
+    return entries[offset:offset + limit]
+
+
+def count_requests() -> int:
+    return len(_load_metrics_from_csv())

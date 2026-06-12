@@ -62,7 +62,11 @@ def record_analyze_log(question: str, context: str, result: dict, latency_ms: fl
     _append_log_to_file(entry)
 
 
-def get_recent_analyze_logs(limit: int = 50) -> list[dict]:
+def get_recent_analyze_logs(limit: int = 50, offset: int = 0) -> list[dict]:
     entries = _load_logs_from_file()
     entries.sort(key=lambda e: e["timestamp"], reverse=True)
-    return entries[:limit]
+    return entries[offset:offset + limit]
+
+
+def count_analyze_logs() -> int:
+    return len(_load_logs_from_file())

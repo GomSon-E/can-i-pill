@@ -113,6 +113,40 @@
   tr:last-child td { border-bottom: none; }
   tbody tr:hover { background: var(--primary-light); }
 
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 12px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .pagination button {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .pagination button:hover:not(:disabled) {
+    color: var(--primary-dark);
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+
+  .pagination button:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -177,13 +211,29 @@
     </thead>
     <tbody></tbody>
   </table>
+  <div class="pagination">
+    <button type="button" id="requests-prev">이전</button>
+    <span id="requests-page-info">0 / 0</span>
+    <button type="button" id="requests-next">다음</button>
+  </div>
 </div>
 
 <div id="logs" class="tab-panel">
   <div id="analyze-logs"></div>
+  <div class="pagination">
+    <button type="button" id="logs-prev">이전</button>
+    <span id="logs-page-info">0 / 0</span>
+    <button type="button" id="logs-next">다음</button>
+  </div>
 </div>
 
 <script>
+const pageSize = 50;
+const pagination = {
+  requests: { offset: 0, total: 0 },
+  logs: { offset: 0, total: 0 },
+};
+
 function formatSeconds(ms) {
   return (ms / 1000).toFixed(2) + 's';
 }
@@ -200,6 +250,26 @@ document.querySelectorAll('.tab-button').forEach((button) => {
     document.getElementById(button.dataset.tab).classList.add('active');
   });
 });
+
+function updatePagination(kind) {
+  const state = pagination[kind];
+  const start = state.total === 0 ? 0 : state.offset + 1;
+  const end = Math.min(state.offset + pageSize, state.total);
+  document.getElementById(`${kind}-page-info`).textContent = `${start}-${end} / ${state.total}`;
+  document.getElementById(`${kind}-prev`).disabled = state.offset === 0;
+  document.getElementById(`${kind}-next`).disabled = state.offset + pageSize >= state.total;
+}
+
+function bindPagination(kind, refreshFn) {
+  document.getElementById(`${kind}-prev`).addEventListener('click', () => {
+    pagination[kind].offset = Math.max(0, pagination[kind].offset - pageSize);
+    refreshFn();
+  });
+  document.getElementById(`${kind}-next`).addEventListener('click', () => {
+    pagination[kind].offset += pageSize;
+    refreshFn();
+  });
+}
 
 async function refreshStats() {
   const res = await fetch('/metrics');
@@ -253,8 +323,10 @@ async function refreshStats() {
 }
 
 async function refreshRequests() {
-  const res = await fetch('/logs/requests');
+  const res = await fetch(`/logs/requests?limit=${pageSize}&offset=${pagination.requests.offset}`);
   const data = await res.json();
+  pagination.requests.total = data.total || 0;
+  pagination.requests.offset = data.offset || 0;
   const tbody = document.querySelector('#requests-table tbody');
   tbody.innerHTML = '';
 
@@ -276,11 +348,14 @@ async function refreshRequests() {
   if (!(data.requests || []).length) {
     tbody.innerHTML = '<tr><td colspan="5" class="empty">아직 요청 내역이 없습니다.</td></tr>';
   }
+  updatePagination('requests');
 }
 
 async function refreshAnalyzeLogs() {
-  const res = await fetch('/logs/analyze');
+  const res = await fetch(`/logs/analyze?limit=${pageSize}&offset=${pagination.logs.offset}`);
   const data = await res.json();
+  pagination.logs.total = data.total || 0;
+  pagination.logs.offset = data.offset || 0;
   const container = document.getElementById('analyze-logs');
   container.innerHTML = '';
 
@@ -311,6 +386,7 @@ async function refreshAnalyzeLogs() {
   if (!(data.logs || []).length) {
     container.innerHTML = '<div class="empty">아직 analyze 로그가 없습니다.</div>';
   }
+  updatePagination('logs');
 }
 
 function refresh() {
@@ -319,8 +395,9 @@ function refresh() {
   refreshAnalyzeLogs();
 }
 
+bindPagination('requests', refreshRequests);
+bindPagination('logs', refreshAnalyzeLogs);
 refresh();
-setInterval(refresh, 5000);
 </script>
 </body>
 </html>
