@@ -57,5 +57,5 @@ jobs:
             -p 8001:8001 \
             --env-file .env \
             can-i-pill-ai
-          curl -fsS --retry 5 --retry-delay 2 --retry-connrefused http://localhost:8001/health
+          curl -fsS --retry 5 --retry-delay 2 --retry-all-errors http://localhost:8001/health
           EOF
