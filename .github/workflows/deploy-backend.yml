@@ -11,7 +11,11 @@ on:
       - ".github/workflows/deploy-backend.yml"
 
 jobs:
+  test:
+    uses: ./.github/workflows/ci-tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
 
     steps:
