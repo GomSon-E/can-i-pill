@@ -3,6 +3,9 @@ import { useState, useEffect, useRef } from 'react'
 import { analyzeStore } from '../../store/analyzeStore'
 import StatusBar from '../../components/StatusBar'
 
+export const DEFAULT_CLARIFICATION_PROMPT =
+  '질문을 조금 더 구체적으로 적어주시면 정확하게 분석해드릴 수 있어요. 예: "혈압약을 먹는데 홍삼을 먹어도 되나요?"처럼 복용 중인 약과 궁금한 음식·영양제를 함께 적어주세요.'
+
 const STEP_LABELS = [
   '등록된 약물 프로필을 확인하고 있어요',
   '의사 선생님이 분석하고 있어요',
@@ -44,13 +47,37 @@ export default function Main04() {
         })
         if (!res.ok) throw new Error(`analyze failed: ${res.status}`)
         const data = await res.json()
+        const responseType = data.type ?? 'analysis'
+        analyzeStore.responseType = responseType
+
+        if (responseType === 'clarification') {
+          analyzeStore.clarificationPrompt = data.clarification_prompt || data.clarificationPrompt || DEFAULT_CLARIFICATION_PROMPT
+          analyzeStore.message = null
+          analyzeStore.result = null
+          if (timerRef.current) clearInterval(timerRef.current)
+          navigate('/main-02')
+          return
+        }
+
+        if (responseType === 'rejection' || responseType === 'error' || responseType === 'registration_required') {
+          analyzeStore.message = data.message ?? '분석을 완료하지 못했어요'
+          analyzeStore.clarificationPrompt = null
+          analyzeStore.result = null
+          if (timerRef.current) clearInterval(timerRef.current)
+          navigate('/main-02')
+          return
+        }
+
         const result = {
           level: data.level,
           doctorOpinion: data.doctorOpinion,
           pharmacistOpinion: data.pharmacistOpinion,
           alternatives: data.alternatives ?? [],
+          items: data.items,
         }
         analyzeStore.result = result
+        analyzeStore.message = null
+        analyzeStore.clarificationPrompt = null
 
         // Save to history
         await fetch('/history', {

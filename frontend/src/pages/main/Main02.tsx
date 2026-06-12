@@ -72,6 +72,9 @@ export default function Main02() {
       return
     }
     analyzeStore.question = question
+    analyzeStore.responseType = null
+    analyzeStore.message = null
+    analyzeStore.clarificationPrompt = null
     navigate('/main-04')
   }
 
@@ -133,6 +136,32 @@ export default function Main02() {
 
       {/* 스크롤 영역 */}
       <div style={{ flex: 1, overflowY: 'auto', paddingLeft: 22, paddingRight: 22, paddingTop: 21 }}>
+        {(analyzeStore.responseType === 'rejection' || analyzeStore.responseType === 'error' || analyzeStore.responseType === 'registration_required') && analyzeStore.message && (
+          <div style={{
+            backgroundColor: '#FDF2F5',
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 13,
+            color: '#E91E63',
+            lineHeight: 1.6,
+            marginBottom: 16,
+          }}>
+            {analyzeStore.message}
+          </div>
+        )}
+        {analyzeStore.responseType === 'clarification' && analyzeStore.clarificationPrompt && (
+          <div style={{
+            backgroundColor: '#FDF2F5',
+            borderRadius: 10,
+            padding: '10px 14px',
+            fontSize: 13,
+            color: '#E91E63',
+            lineHeight: 1.6,
+            marginBottom: 16,
+          }}>
+            {analyzeStore.clarificationPrompt}
+          </div>
+        )}
         <h2 style={{ fontSize: 21, fontWeight: 800, color: '#1A1B22', margin: '0 0 14px' }}>
           먹어도 될지 물어보세요
         </h2>

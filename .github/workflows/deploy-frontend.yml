@@ -1,0 +1,70 @@
+name: Deploy frontend
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-frontend.yml"
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci-tests.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.LIGHTSAIL_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Upload frontend assets and nginx config
+        run: |
+          sed "s/__BACKEND_HOST__/${{ secrets.GCP_BACKEND_HOST }}/g" \
+            frontend/nginx.conf > /tmp/can-i-pill-nginx.conf
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            frontend/dist/ "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/can-i-pill-dist/"
+          rsync -az \
+            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
+            /tmp/can-i-pill-nginx.conf "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}:/tmp/can-i-pill-nginx.conf"
+
+      - name: Publish frontend through nginx
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            "${{ secrets.LIGHTSAIL_USER }}@${{ secrets.LIGHTSAIL_HOST }}" <<'EOF'
+          set -euo pipefail
+          if ! command -v nginx >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y nginx
+          fi
+          sudo mkdir -p /var/www/can-i-pill
+          sudo rsync -a --delete /tmp/can-i-pill-dist/ /var/www/can-i-pill/
+          sudo cp /tmp/can-i-pill-nginx.conf /etc/nginx/sites-available/default
+          sudo nginx -t
+          sudo systemctl enable --now nginx
+          sudo systemctl reload nginx
+          curl -fsS http://localhost/
+          EOF

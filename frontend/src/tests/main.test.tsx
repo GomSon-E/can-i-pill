@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import AppRoutes from '../AppRoutes'
@@ -27,6 +27,7 @@ describe('S-11: 홈 진입 — 약물 등록 있음', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({                               // GET /prescriptions
         prescriptions: [{ drugs: [{ name: '메트포르민' }, { name: '혈압약' }] }]
       }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ supplements: [] }) })          // GET /supplements
       .mockResolvedValueOnce({ ok: true, json: async () => ({                               // GET /history
         history: [
           { id: 1, question: '홍삼 먹어도 되나요?', level: 'danger', createdAt: '2026-05-15T10:00:00Z' },
@@ -62,10 +63,12 @@ describe('S-11: 홈 진입 — 약물 등록 있음', () => {
     })
   })
 
-  it('약물 카드에 등록된 약 이름 표시', async () => {
+  it('약물 카드에 등록된 약 개수 표시', async () => {
     renderPage('/main-01')
     await waitFor(() => {
-      expect(screen.getByText(/메트포르민/)).toBeInTheDocument()
+      expect(screen.getByText((_, element) =>
+        element?.textContent === '처방전 1개 · 약 2개 · 영양제 0개'
+      )).toBeInTheDocument()
     })
   })
 
@@ -98,6 +101,7 @@ describe('S-12: 홈 진입 — 약물 미등록', () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nickname: '영자' }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ supplements: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ history: [] }) })
     )
   })
@@ -157,7 +161,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
   it('MAIN-04 진입 시 data-testid="page-main-04" 렌더', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
@@ -167,7 +171,7 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
   it('MAIN-04 진입 시 POST /analyze 호출', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     vi.stubGlobal('fetch', fetchMock)
     renderPage('/main-04')
@@ -176,8 +180,29 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     })
   })
 
+  it('MAIN-04는 /analyze 요청 body를 question과 context로 유지하고 user_id를 보내지 않음', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.question = '홍삼 먹어도 되나요?'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [{ drugs: [{ name: '혈압약' }] }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderPage('/main-04')
+
+    await waitFor(() => {
+      const analyzeCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/analyze'))
+      expect(analyzeCall).toBeTruthy()
+      const body = JSON.parse(analyzeCall?.[1]?.body as string)
+      expect(body).toEqual({ question: '홍삼 먹어도 되나요?', context: '혈압약' })
+      expect(body).not.toHaveProperty('user_id')
+    })
+  })
+
   it('MAIN-04 진입 시 POST /history 호출', async () => {
     const analyzeResponse = {
+      type: 'analysis',
       level: 'safe',
       doctorOpinion: { summary: '안전합니다', detail: '안전합니다' },
       pharmacistOpinion: { summary: '복용 가능합니다', detail: '복용 가능합니다' },
@@ -201,16 +226,218 @@ describe('S-13: 질문 입력 — 텍스트 분석', () => {
     })
   })
 
+  it('MAIN-04는 복합 항목 분석 완료 후 history body에 items를 포함', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'caution', items }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderPage('/main-04')
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/history'), expect.objectContaining({ method: 'POST' }))
+    })
+    const historyCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/history'))
+    expect(JSON.parse(historyCall?.[1]?.body as string)).toMatchObject({
+      level: 'caution',
+      items,
+    })
+  })
+
   it('MAIN-04 분석 완료 후 MAIN-05로 이동', async () => {
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
     await waitFor(() => {
       expect(mockNavigate).toHaveBeenCalledWith('/main-05')
     })
+  })
+
+  it('MAIN-04는 복합 항목 분석 응답의 items를 저장하고 MAIN-05로 이동', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+      {
+        name: '비타민C',
+        level: 'danger',
+        doctorOpinion: { summary: '출혈 위험 증가', detail: '출혈 위험이 커질 수 있습니다.' },
+        pharmacistOpinion: { summary: '즉시 상담 필요', detail: '복용 간격을 두고 의사와 상담하세요.' },
+        alternatives: [],
+      },
+    ]
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'danger', items }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+
+    renderPage('/main-04')
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-05')
+    })
+    expect(analyzeStore.result?.items).toEqual(items)
+  })
+
+  it('응답 type이 clarification이면 clarificationPrompt 저장 후 MAIN-02로 복귀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'clarification', clarification_prompt: '섭취하려는 항목을 알려주세요.' }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('clarification')
+    expect(analyzeStore.clarificationPrompt).toBe('섭취하려는 항목을 알려주세요.')
+  })
+
+  it('응답 type이 clarification이지만 clarification_prompt가 없으면 기본 안내 문구를 저장', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'clarification' }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('clarification')
+    expect(analyzeStore.clarificationPrompt).toBeTruthy()
+  })
+
+  it('응답 type이 rejection이면 message 저장 후 MAIN-02로 복귀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'rejection', message: '이 질문은 서비스 범위를 벗어났습니다.' }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('rejection')
+    expect(analyzeStore.message).toBe('이 질문은 서비스 범위를 벗어났습니다.')
+  })
+
+  it('응답 type이 error이면 message 저장 후 MAIN-02로 복귀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'error', message: '분석 한도 초과' }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('error')
+    expect(analyzeStore.message).toBe('분석 한도 초과')
+  })
+
+  it('응답 type이 registration_required이면 message 저장 후 MAIN-02로 복귀', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'registration_required', message: "복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요." }) })
+    )
+    const { analyzeStore } = await import('../store/analyzeStore')
+    renderPage('/main-04')
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-02')
+    })
+    expect(analyzeStore.responseType).toBe('registration_required')
+    expect(analyzeStore.message).toBe("복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요.")
+  })
+})
+
+// ─── S-13b: MAIN-02 — 분석 응답 type별 안내 표시 ───────────────────────────
+describe('S-13b: MAIN-02 — clarification 힌트 / rejection·error 토스트', () => {
+  beforeEach(() => { mockNavigate.mockClear() })
+  afterEach(async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = null
+    analyzeStore.message = null
+    analyzeStore.clarificationPrompt = null
+  })
+
+  it('clarificationPrompt 있으면 입력 필드 위에 힌트 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'clarification'
+    analyzeStore.clarificationPrompt = '섭취하려는 항목을 알려주세요.'
+    renderPage('/main-02')
+    expect(screen.getByText('섭취하려는 항목을 알려주세요.')).toBeInTheDocument()
+  })
+
+  it('clarification 힌트도 rejection/error/registration_required 메시지와 동일하게 헤더 위쪽에 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'clarification'
+    analyzeStore.clarificationPrompt = '섭취하려는 항목을 알려주세요.'
+    renderPage('/main-02')
+    const hint = screen.getByText('섭취하려는 항목을 알려주세요.')
+    const heading = screen.getByText('먹어도 될지 물어보세요')
+    expect(hint.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('clarification인데 clarificationPrompt가 비어있으면 기본 안내 문구 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    const { DEFAULT_CLARIFICATION_PROMPT } = await import('../pages/main/Main04')
+    analyzeStore.responseType = 'clarification'
+    analyzeStore.clarificationPrompt = DEFAULT_CLARIFICATION_PROMPT
+    renderPage('/main-02')
+    expect(screen.getByText(DEFAULT_CLARIFICATION_PROMPT)).toBeInTheDocument()
+  })
+
+  it('responseType이 rejection이면 message 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'rejection'
+    analyzeStore.message = '이 질문은 서비스 범위를 벗어났습니다.'
+    renderPage('/main-02')
+    expect(screen.getByText('이 질문은 서비스 범위를 벗어났습니다.')).toBeInTheDocument()
+  })
+
+  it('responseType이 error이면 message 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'error'
+    analyzeStore.message = '분석 한도 초과'
+    renderPage('/main-02')
+    expect(screen.getByText('분석 한도 초과')).toBeInTheDocument()
+  })
+
+  it('responseType이 registration_required이면 message 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'registration_required'
+    analyzeStore.message = "복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요."
+    renderPage('/main-02')
+    expect(screen.getByText("복용 중인 약이나 영양제가 등록되어 있지 않아 분석할 수 없어요. '내 약물'에서 먼저 등록한 뒤 다시 질문해 주세요.")).toBeInTheDocument()
+  })
+
+  it('rejection/error 메시지는 고정 토스트가 아닌, 줄바꿈되는 화면 내 박스로 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.responseType = 'rejection'
+    analyzeStore.message = '이 질문은 약물, 영양제, 음식 간의 상호작용과 관련이 없으므로 답변할 수 없습니다.'
+    renderPage('/main-02')
+    const el = screen.getByText('이 질문은 약물, 영양제, 음식 간의 상호작용과 관련이 없으므로 답변할 수 없습니다.')
+    expect(el).not.toHaveStyle({ position: 'fixed' })
+    expect(el).not.toHaveStyle({ whiteSpace: 'nowrap' })
   })
 })
 
@@ -287,7 +514,7 @@ describe('S-16: 분석 결과 — 안전', () => {
     // set result in store via Main04 navigate flow
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ type: 'analysis', level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
     )
     renderPage('/main-04')
@@ -306,6 +533,66 @@ describe('S-16: 분석 결과 — 안전', () => {
     analyzeStore.result = { level: 'safe', doctorOpinion: { summary: '안전합니다', detail: '안전합니다' }, pharmacistOpinion: { summary: '안전합니다', detail: '안전합니다' }, alternatives: [] }
     renderPage('/main-05')
     expect(screen.queryByText(/대신 이런 건/)).not.toBeInTheDocument()
+  })
+})
+
+// ─── S-16b: 분석 결과 — 복합 항목 ──────────────────────────────────────────
+describe('S-16b: 분석 결과 — 복합 항목', () => {
+  beforeEach(async () => {
+    mockNavigate.mockClear()
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.result = {
+      level: 'danger',
+      doctorOpinion: { summary: '', detail: '' },
+      pharmacistOpinion: { summary: '', detail: '' },
+      alternatives: [],
+      items: [
+        {
+          name: '홍삼',
+          level: 'caution',
+          doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+          pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+          alternatives: [],
+        },
+        {
+          name: '비타민C',
+          level: 'danger',
+          doctorOpinion: { summary: '출혈 위험 증가', detail: '출혈 위험이 커질 수 있습니다.' },
+          pharmacistOpinion: { summary: '즉시 상담 필요', detail: '복용 간격을 두고 의사와 상담하세요.' },
+          alternatives: [],
+        },
+      ],
+    }
+  })
+
+  it('items가 있으면 항목별 이름과 의견 요약을 표시', () => {
+    renderPage('/main-05')
+    expect(screen.getByText('홍삼')).toBeInTheDocument()
+    expect(screen.getByText('비타민C')).toBeInTheDocument()
+    expect(screen.getByText(/혈압약과 상호작용 가능성/)).toBeInTheDocument()
+    expect(screen.getByText(/출혈 위험 증가/)).toBeInTheDocument()
+  })
+
+  it('top-level 의견 없이 items만 있어도 항목별 결과를 표시', async () => {
+    const { analyzeStore } = await import('../store/analyzeStore')
+    analyzeStore.result = {
+      level: 'danger',
+      items: [
+        {
+          name: '홍삼',
+          level: 'caution',
+          doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+          pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+          alternatives: [],
+        },
+      ],
+    } as typeof analyzeStore.result
+
+    renderPage('/main-05')
+
+    expect(screen.queryByText('분석 결과 형식이 올바르지 않습니다.')).not.toBeInTheDocument()
+    expect(screen.getByText('홍삼')).toBeInTheDocument()
+    expect(screen.getByText(/혈압약과 상호작용 가능성/)).toBeInTheDocument()
   })
 })
 

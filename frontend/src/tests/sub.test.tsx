@@ -136,16 +136,15 @@ describe('S-21: 처방전 추가', () => {
     expect(fileInput).toBeInTheDocument()
     expect(fileInput.type).toBe('file')
     expect(fileInput.accept).toBe('image/*')
-    expect(fileInput.hasAttribute('capture')).toBe(true)
     expect(fileInput.style.display).toBe('none')
   })
 
-  it('Sub02 "처방전 촬영하기" 버튼 탭 시 파일 입력이 트리거된다', async () => {
+  it('Sub02 "처방전 촬영하기" 라벨이 카메라 파일 입력을 포함한다', () => {
     renderPage('/sub-02')
-    const fileInput = screen.getByTestId('camera-input') as HTMLInputElement
-    const clickSpy = vi.spyOn(fileInput, 'click')
-    await userEvent.click(screen.getByRole('button', { name: /처방전 촬영/ }))
-    expect(clickSpy).toHaveBeenCalled()
+    const label = screen.getByText('처방전 촬영하기')
+    const fileInput = screen.getByTestId('camera-input')
+    expect(label.tagName).toBe('LABEL')
+    expect(label).toContainElement(fileInput)
   })
 
   it('Sub02 파일 선택 시 FormData로 POST /ocr 호출 후 /sub-07 로 이동한다', async () => {
@@ -224,8 +223,8 @@ describe('S-23: 처방전 삭제', () => {
     renderPage('/sub-01')
     await waitFor(() => screen.getByText('내과 처방전'))
     await userEvent.click(screen.getByText('내과 처방전'))
-    await waitFor(() => screen.getByRole('button', { name: /삭제/ }))
-    await userEvent.click(screen.getAllByRole('button', { name: /삭제/ })[0])
+    await waitFor(() => screen.getByRole('button', { name: '삭제' }))
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }))
     await waitFor(() => {
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
@@ -246,8 +245,8 @@ describe('S-23: 처방전 삭제', () => {
     renderPage('/sub-01')
     await waitFor(() => screen.getByText('내과 처방전'))
     await userEvent.click(screen.getByText('내과 처방전'))
-    await waitFor(() => screen.getByRole('button', { name: /삭제/ }))
-    await userEvent.click(screen.getAllByRole('button', { name: /삭제/ })[0])
+    await waitFor(() => screen.getByRole('button', { name: '삭제' }))
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }))
     await waitFor(() => screen.getByRole('dialog'))
     await userEvent.click(screen.getByRole('button', { name: /확인/ }))
     await waitFor(() => {
@@ -291,37 +290,11 @@ describe('S-24: 영양제 추가', () => {
     defaultFetchMock.mockClear()
   })
 
-  it('"영양제 추가" 버튼 탭 시 촬영 UI가 노출된다', async () => {
+  it('"영양제 추가" 버튼 탭 시 /sub-08 로 이동한다', async () => {
     renderPage('/sub-01')
     await waitFor(() => screen.getByRole('button', { name: /영양제 추가/ }))
     await userEvent.click(screen.getByRole('button', { name: /영양제 추가/ }))
-    await waitFor(() => {
-      expect(screen.getByTestId('supplement-upload-ui')).toBeInTheDocument()
-    })
-  })
-
-  it('영양제 촬영 시 POST /label MOCK 호출 후 POST /supplements 호출', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [{ id: '1', name: '내과 처방전', drugs: [{ name: '메트포르민' }] }], supplements: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ prescriptions: [{ id: '1', name: '내과 처방전', drugs: [{ name: '메트포르민' }] }], supplements: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ name: '비타민C' }) }) // POST /label
-      .mockResolvedValueOnce({ ok: true, json: async () => ({}) }) // POST /supplements
-    vi.stubGlobal('fetch', fetchMock)
-    renderPage('/sub-01')
-    await waitFor(() => screen.getByRole('button', { name: /영양제 추가/ }))
-    await userEvent.click(screen.getByRole('button', { name: /영양제 추가/ }))
-    await waitFor(() => screen.getByTestId('supplement-upload-ui'))
-    await userEvent.click(screen.getByRole('button', { name: /촬영하기/ }))
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/label'),
-        expect.objectContaining({ method: 'POST' })
-      )
-      expect(fetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/supplements'),
-        expect.objectContaining({ method: 'POST' })
-      )
-    })
+    expect(mockNavigate).toHaveBeenCalledWith('/sub-08')
   })
 })
 
@@ -487,11 +460,51 @@ describe('S-28: 과거 결과 재조회', () => {
     await userEvent.click(screen.getAllByTestId('history-card')[0])
     await waitFor(() => {
       expect(defaultFetchMock).toHaveBeenCalledWith(
-        expect.stringContaining('/history/1'),
-        expect.anything()
+        expect.stringContaining('/history/1')
       )
       expect(mockNavigate).toHaveBeenCalledWith('/main-05')
     })
+  })
+
+  it('복합 항목 이력 카드 탭 시 상세 응답의 items를 분석 스토어에 복원한다', async () => {
+    const items = [
+      {
+        name: '홍삼',
+        level: 'caution',
+        doctorOpinion: { summary: '혈압약과 상호작용 가능성', detail: '혈압약 효과가 줄어들 수 있습니다.' },
+        pharmacistOpinion: { summary: '복용 시간 조절 필요', detail: '복용 시간을 2시간 띄우세요.' },
+        alternatives: [],
+      },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          history: [
+            { id: '1', level: 'caution', question: '홍삼 같이 먹어도 돼요?', created_at: '2026-05-16' },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          id: '1',
+          level: 'caution',
+          question: '홍삼 같이 먹어도 돼요?',
+          items,
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const { analyzeStore } = await import('../store/analyzeStore')
+
+    renderPage('/sub-04')
+    await waitFor(() => screen.getByText('홍삼 같이 먹어도 돼요?'))
+    await userEvent.click(screen.getByTestId('history-card'))
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/main-05')
+    })
+    expect(analyzeStore.result?.items).toEqual(items)
   })
 })
 

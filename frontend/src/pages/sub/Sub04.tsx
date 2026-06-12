@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Sub05 from './Sub05'
 import StatusBar from '../../components/StatusBar'
-import { analyzeStore } from '../../store/analyzeStore'
+import { setAnalyzeFromHistory } from '../../store/analyzeStore'
 
 interface HistoryItem {
   id: string
@@ -68,13 +68,13 @@ export default function Sub04() {
   const handleCardClick = async (item: HistoryItem) => {
     const res = await fetch(`/history/${item.id}`)
     const data = await res.json()
-    analyzeStore.question = data.question
-    analyzeStore.result = {
+    setAnalyzeFromHistory(data.question, {
       level: data.level,
       doctorOpinion: data.doctorOpinion,
       pharmacistOpinion: data.pharmacistOpinion,
       alternatives: data.alternatives ?? [],
-    }
+      items: data.items,
+    })
     navigate('/main-05')
   }
 

@@ -316,7 +316,7 @@
 
 - [x] `frontend/Dockerfile` 작성 — `npm run build` → nginx로 정적 파일 서빙
 - [x] `frontend/nginx.conf` 작성 — SPA 라우팅(`try_files $uri /index.html`), gzip 압축
-- [x] `backend/Dockerfile` 작성 — `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 3`
+- [x] `backend/Dockerfile` 작성 — `uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1` (초기값, 부하 테스트 후 조정)
 - [x] `ai_server/Dockerfile` 작성 — `uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 1`
 - [x] 루트에 `docker-compose.yml` 작성 — 로컬 개발용 (backend:8000, ai_server:8001, frontend:80)
   - `backend`가 `ai_server` 서비스명으로 접근할 수 있도록 네트워크 구성
@@ -364,78 +364,220 @@
 > `ai_server/app/routers/ai.py`의 단발성 Gemini 호출을 Harness 루프 기반 Agentic AI로 전환.
 > Agent가 validate → gather_context → analyze → finish 순서를 자율 결정,
 > Harness가 allowed_actions / max_steps / completion_conditions로 행동 범위 제어.
+> 범위는 AI 분석 경로로 한정한다. Supabase, user_id 발급, 인증/권한, 사용자별 저장소 분리는 도입하지 않는다.
+> 현재처럼 `backend/app/store.py`의 인메모리 싱글톤 데이터를 사용하며, `gather_context`는 백엔드 API에서 현재 사용자 데이터를 읽는다.
+> TDD 원칙: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요한 구조 정리(Refactor) 순서로 진행한다.
 
 ### H-1. 파일 구조 생성
 
-- [ ] `ai_server/app/harness/__init__.py` 생성
-- [ ] `ai_server/app/harness/tools.py` 생성 (함수 스텁)
-- [ ] `ai_server/app/harness/harness.py` 생성 (함수 스텁)
-- [ ] `ai_server/tests/test_harness_tools.py` 생성
-- [ ] `ai_server/tests/test_harness_loop.py` 생성
+- [x] 테스트: `ai_server/tests/test_harness_tools.py`에서 `app.harness.tools` import 가능성 검증 → `ai_server/app/harness/__init__.py`, `tools.py` 생성
+- [x] 테스트: `ai_server/tests/test_harness_loop.py`에서 `app.harness.harness` import 가능성 검증 → `harness.py` 생성
+- [x] 테스트: `HARNESS_POLICY`에 `allowed_actions`, `max_steps`, `completion_conditions`가 존재하고 완료 action이 allowed action에 포함되는지 검증 → 최소 상수 정의
 
 ### H-2. Gemini function calling 연동 확인
 
-- [ ] `tools=` 파라미터로 단순 tool 1개 호출 성공하는 smoke 테스트 작성 및 통과
-- [ ] 6개 tool의 Gemini function declaration JSON Schema 정의
+- [x] `tools=` 파라미터로 단순 tool 1개 호출 성공하는 smoke 테스트 작성 및 통과
+- [x] 6개 tool의 Gemini function declaration JSON Schema 정의
   - `validate_query` / `gather_context` / `ask_clarification` / `analyze` / `reject` / `finish`
-- [ ] `_call_with_tools(messages, tool_declarations) → (action_name, action_args)` 헬퍼 작성
+- [x] `_call_with_tools(messages, tool_declarations) → (action_name, action_args)` 헬퍼 작성
+- [x] 테스트: Gemini가 allowed action 밖의 이름을 반환하지 않는 정상 케이스를 mock으로 검증
 
 ### H-3. Tools 구현 (tools.py)
 
-- [ ] `validate_query(question: str) → dict` 구현
-  - Gemini 호출해 `{ is_relevant, is_clear, items, missing_info }` 반환
-  - 테스트: `"오늘 날씨 어때?"` → `is_relevant: false`
-  - 테스트: `"이거 먹어도 돼요?"` → `is_clear: false`
-  - 테스트: `"홍삼 먹어도 되나요?"` → `is_relevant: true, is_clear: true`
-- [ ] `gather_context(user_id: str) → dict` 구현
-  - Supabase에서 drugs, supplements, health_conditions 조회
-  - 테스트: 빈 user_id → 빈 배열 반환 / 유효 user_id → 프로필 반환
-- [ ] `ask_clarification(reason: str) → dict` 구현 — `{ clarification_prompt: str }` 반환
-- [ ] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
-  - 테스트: level이 항상 `safe | caution | danger` 중 하나
-- [ ] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
-- [ ] `finish(result: dict) → dict` 구현 — `{ type: "analysis", **result }` 반환
+- [x] `validate_query(question: str) → dict` 구현 — Gemini 호출해 `{ is_relevant, is_clear, items, missing_info }` 반환
+- [x] `validate_query` 테스트: `"오늘 날씨 어때?"` → `is_relevant: false`
+- [x] `validate_query` 테스트: `"이거 먹어도 돼요?"` → `is_clear: false`
+- [x] `validate_query` 테스트: `"홍삼 먹어도 되나요?"` → `is_relevant: true, is_clear: true`
+- [x] `gather_context() → dict` 구현 — Supabase/user_id 없이 현재 백엔드 API의 인메모리 싱글톤 데이터 조회 (`GET /prescriptions`, `GET /supplements`, `GET /health-info`, `/health-info` 404는 정상적인 빈 프로필로 처리)
+- [x] `gather_context` 테스트: 백엔드 API가 모두 비어있거나 404인 경우 → `drugs: [], supplements: [], health_conditions: [], allergies: []`
+- [x] `gather_context` 테스트: 처방전/영양제/건강정보 응답이 있는 경우 → 분석용 dict로 정규화
+- [x] `ask_clarification(reason: str) → dict` 구현 — `{ clarification_prompt: str }` 반환
+- [x] `analyze(question: str, context: str) → dict` 구현 — 기존 analyze 로직 재사용
+- [x] `analyze` 테스트: level이 항상 `safe | caution | danger` 중 하나
+- [x] `reject(reason: str) → dict` 구현 — `{ type: "rejection", message: str }` 반환
+- [x] `finish(result: dict) → dict` 구현 — `{ type: "analysis", **result }` 반환
 
 ### H-4. Harness 루프 구현 (harness.py)
 
-- [ ] `HARNESS_POLICY` 상수 정의 (goal, allowed_actions, max_steps: 5, completion_conditions)
-- [ ] `execute_tool(name, args, user_id) → dict` 구현
-  - 테스트: allowed_actions 외 이름 → `PermissionError`
-- [ ] `run_agent(question: str, user_id: str) → dict` 구현
-  - messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
-  - 테스트: 무관한 질문 → reject 2 step 내 종료
-  - 테스트: 정상 질문 → finish → analysis 결과 반환
-  - 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
-- [ ] trace 기록 — 각 step의 action/args/observation 리스트 누적
+- [x] `HARNESS_POLICY` 상수 정의 (goal, allowed_actions, max_steps: 7, completion_conditions) — validate → gather_context → analyze → finish 기본 4 step과 self-evaluate 재시도 최대 2회를 수용
+- [x] `HARNESS_POLICY`의 completion_conditions에 `finish`, `reject`, `ask_clarification` 포함
+- [x] `execute_tool(name, args) → dict` 구현
+- [x] `execute_tool` 테스트: allowed_actions 외 이름 → `PermissionError`
+- [x] `run_agent(question: str) → dict` 구현 — messages 초기화 → for step in range(max_steps) → _call_with_tools → execute_tool → observation 추가 → completion_conditions 확인
+- [x] `run_agent` 분기 규칙: `is_relevant=false` → `reject`
+- [x] `run_agent` 분기 규칙: `is_relevant=true, is_clear=false` → `ask_clarification`
+- [x] `run_agent` 분기 규칙: `is_relevant=false, is_clear=true`처럼 애매한 조합 → 무관 질문으로 보고 `reject`
+- [x] `run_agent` 분기 규칙: `is_relevant=false, is_clear=false` → 서비스 범위 밖이거나 정보 부족한 질문으로 보고 `reject` 우선
+- [x] `run_agent` 테스트: 무관한 질문 → reject 2 step 내 종료
+- [x] `run_agent` 테스트: 불명확한 질문 → clarification 2 step 내 종료
+- [x] `run_agent` 테스트: 정상 질문 → finish → analysis 결과 반환
+- [x] `run_agent` 테스트: max_steps 도달 → `{ type: "error", message: "분석 한도 초과" }` 반환
+- [x] trace 기록 — 각 step의 action/args/observation 리스트 누적
 
 ### H-5. Harness.evaluate() 품질 검증 루프
 
-- [ ] `evaluate(result, question) → (bool, int, list)` 구현
-  - detail 2문장 이상 여부 (-20점 미달 시)
-  - 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
-  - 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
-  - score >= 70 → True
-  - 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
-- [ ] run_agent에 self-evaluate 재시도 통합
-  - evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
-  - 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
+- [x] `evaluate(result, question) → (bool, int, list)` 구현 — score >= 70 → True
+- [x] `evaluate`: detail 2문장 이상 여부 (-20점 미달 시)
+- [x] `evaluate`: 행동 지침 키워드(복용 시간, 간격 등) 포함 여부 (-20점)
+- [x] `evaluate`: 상담 권유 문구(의사, 약사) 포함 여부 (-20점)
+- [x] `evaluate` 테스트: 짧은 detail → score < 70 / 충분한 detail + 행동지침 + 상담권유 → score >= 70
+- [x] `run_agent`에 self-evaluate 재시도 통합 — evaluate() False → issues를 memory에 기록 + strategy 수정 후 analyze 재호출 (최대 2회)
+- [x] self-evaluate 재시도 테스트: 1차 짧은 응답 → evaluate 실패 → 재시도 → 더 긴 응답 반환
 
 ### H-6. /analyze 엔드포인트 통합
 
-- [ ] `AnalyzeRequest` 스키마 변경: `{ question: str, user_id: str }` (context 제거)
-- [ ] `ai.py`의 `analyze()` 핸들러에서 `harness.run_agent(question, user_id)` 호출로 교체
-- [ ] 응답 스키마에 `type` 필드 포함: `"analysis" | "clarification" | "rejection" | "error"`
-- [ ] 통합 테스트: 무관한 질문 → `{ type: "rejection" }` 반환
-- [ ] 통합 테스트: 불명확한 질문 → `{ type: "clarification", clarification_prompt }` 반환
-- [ ] 통합 테스트: 정상 질문 → `{ type: "analysis", level, doctorOpinion, ... }` 반환
+- [x] `AnalyzeRequest` 스키마는 `{ question: str, context: str = "" }` 유지 — 프론트/백엔드의 기존 요청 계약을 최대한 유지한다.
+- [x] Harness 전환 후 기본 context는 `gather_context()`가 백엔드 API에서 구성한다.
+- [x] 기존 클라이언트가 보내는 `context`는 호환용으로 받되, 새 하네스 경로에서는 우선순위를 낮추거나 분석 보조 정보로만 사용한다.
+- [x] `ai.py`의 `analyze()` 핸들러에서 `harness.run_agent(question)` 호출로 교체
+- [x] 응답 스키마에 `type` 필드 포함: `"analysis" | "clarification" | "rejection" | "error"`
+- [x] 통합 테스트: 무관한 질문 → `{ type: "rejection" }` 반환
+- [x] 통합 테스트: 불명확한 질문 → `{ type: "clarification", clarification_prompt }` 반환
+- [x] 통합 테스트: 정상 질문 → `{ type: "analysis", level, doctorOpinion, ... }` 반환
 
 ### H-7. 프론트엔드 대응
 
-- [ ] store에 `userId: string` 상태 추가 — POST /user 응답에서 저장
-- [ ] `/analyze` 요청 body 변경: `{ context }` → `{ user_id }`
-- [ ] `analyzeStore`에 `responseType: "analysis" | "clarification" | "rejection"` 필드 추가
-- [ ] `Main04.tsx`: 응답 type 확인 후 분기
-  - `"clarification"` → clarification_prompt 표시 후 Main02 복귀
-  - `"rejection"` → message 토스트 표시 후 Main02 복귀
-  - `"analysis"` → 기존대로 Main05 이동
-- [ ] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시
+- [x] userId 상태 추가 없음 — POST /user 응답/저장 구조 변경하지 않음
+- [x] `/analyze` 요청 body는 기존 `{ question, context }` 형태 유지
+- [x] `analyzeStore`에 `responseType: "analysis" | "clarification" | "rejection" | "error" | null` 필드 추가
+- [x] `Main04.tsx`: 응답 type이 `"clarification"`이면 clarification_prompt 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"rejection"`이면 message 토스트 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"error"`이면 message 표시 후 Main02 복귀
+- [x] `Main04.tsx`: 응답 type이 `"analysis"`이면 기존대로 Main05 이동
+- [x] `Main02.tsx`: clarification_prompt 있으면 입력 필드 위에 힌트 표시
+
+### H-8. 제안서 정합화 — Agent 자율 분기 / Self-Evaluate 외부 루프 / 멀티 에이전트 병렬 분석
+
+> `docs/analyze-agentic-redesign-proposal.md` 대비 단순화되어 구현된 3가지 지점을 제안서 설계대로 재정렬한다.
+> (`finish` 호출 시 `last_analyze_result`를 백필하는 보정 로직은 실용적 추가로 유지하며 이번 변경 대상이 아니다.)
+
+#### H-8-1. validate_query 이후 분기를 Agent 자율 선택으로 전환
+
+- [x] `run_agent`에서 `validate_query` 관측 직후 `is_relevant`/`is_clear`를 검사해 `reject`/`ask_clarification`을 직접 호출하는 결정론적 분기 코드 제거
+- [x] `HARNESS_POLICY["goal"]` 또는 tool description에 "validate_query 결과의 is_relevant/is_clear/missing_info를 보고 다음 action(reject/ask_clarification/gather_context 등)을 직접 선택하라"는 지침 보강
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=false`) 관측 후 다음 호출에서 agent가 직접 `reject`를 선택 → run_agent가 결정론적 분기 없이 completion_conditions만으로 종료하고 `{ type: "rejection", ... }` 반환
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=true, is_clear=false`) 관측 후 다음 호출에서 agent가 직접 `ask_clarification`을 선택 → `{ clarification_prompt: ... }` 반환
+- [x] 테스트: `_call_with_tools`를 mock하여 `validate_query`(`is_relevant=true, is_clear=true`) 관측 후 다음 호출에서 agent가 `gather_context` 또는 `analyze`를 선택해 정상 진행
+- [x] 기존 H-4 "분기 규칙" 테스트(무관/불명확 질문 케이스)를 위 agent 선택 기반 시나리오로 갱신
+
+#### H-8-2. Self-Evaluate 재시도를 외부 루프 구조로 전환
+
+- [x] `run_agent`의 단일 패스(validate → gather_context → analyze → finish, max_steps 소비)를 내부 헬퍼(예: `_run_episode(messages, trace) → (action_name, observation)`)로 추출 — completion_conditions 도달 또는 max_steps 도달 시 반환
+- [x] 테스트: `_run_episode`가 `finish` 도달 시 `("finish", observation)` 반환, max_steps 도달 시 `("error", {...})` 반환
+- [x] `run_agent`를 `while not task_completed:` 형태의 외부 루프로 재작성 — `_run_episode` 호출 → `finish` 결과면 `evaluate()` 호출 → 미달 시 issues를 messages에 기록하고 `_run_episode`를 재호출(최대 2회), 매 회마다 max_steps 예산을 새로 부여
+- [x] 테스트: 1차 `_run_episode` 결과가 evaluate 실패(score < 70) → 2차 `_run_episode`가 새로운 max_steps 예산으로 재실행되어 더 긴 응답 반환 (기존 self-evaluate 재시도 테스트를 새 구조로 갱신)
+- [x] 테스트: `reject` / `ask_clarification` / `error`로 종료된 episode는 `evaluate` 없이 즉시 반환 (self-evaluate는 `finish` 경로에만 적용)
+
+#### H-8-3. 복합 항목 멀티 에이전트 병렬 분석 (예시 5)
+
+- [x] `tools.py`에 `analyze_item(item: str, context: str) → dict` 구현 — 단일 항목에 대한 `{ name, level, doctorOpinion, pharmacistOpinion, alternatives }` 반환 (기존 `analyze`의 분석 규칙을 항목 단위로 재사용)
+- [x] 테스트: `analyze_item`은 항상 `level ∈ {safe, caution, danger}` 및 `name == item` 반환
+- [x] `harness.py`에 `run_sub_agents(items: list[str], context: str) → list[dict]` 구현 — `asyncio.gather` + `asyncio.to_thread`로 항목별 `analyze_item`을 병렬 실행
+- [x] 테스트: `run_sub_agents`가 mock된 `analyze_item`을 항목 수만큼 병렬 호출하고 입력 순서대로 결과 리스트 반환
+- [x] `run_agent` 분기: `validate_query` 관측의 `items` 길이가 2 이상이고 agent가 `analyze`를 선택하면 단일 `analyze` 대신 `run_sub_agents` 결과를 관측으로 사용
+- [x] `finish`/응답 스키마에 `items: [{ name, level, doctorOpinion, pharmacistOpinion, alternatives }, ...]` 필드 추가, 최상위 `level`은 `items` 중 최고 위험도(`danger > caution > safe`)로 산출
+- [x] 테스트: `validate_query`의 `items`가 2개 이상인 질문 → `finish` 결과에 `items` 배열과 최고 위험도 `level` 포함
+- [x] 테스트: 기존 단일 항목 질문은 `items` 없이 기존 응답 스키마 유지 (회귀 방지)
+- [x] `frontend/src/store/analyzeStore.ts`의 `AnalyzeResult`에 옵셔널 `items?: AnalyzeItem[]` 필드 추가
+- [x] `Main05.tsx`에서 `items`가 있으면 항목별 결과를 표시하고, 없으면 기존 단일 결과 표시를 유지
+
+### H-9. Harness 리뷰 후속 보완 — 복합 항목 통합 경로 / 이력 / retry 상태 / tool-call 안정성
+
+> 코드 리뷰에서 발견한 결함을 TDD 방식으로 보완한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+> 구조 변경과 동작 변경이 모두 필요하면 구조 변경을 먼저 작게 분리하고, 테스트가 통과한 상태에서 다음 행동 변경으로 넘어간다.
+
+#### H-9-1. 프론트 복합 항목 응답 저장 경로 보완
+
+- [x] 테스트: `Main04.tsx`가 `/analyze`에서 `{ type: "analysis", level, items }` 응답을 받으면 `analyzeStore.result.items`에 그대로 저장하고 `/main-05`로 이동한다.
+- [x] `Main04.tsx`: analysis 응답 저장 시 `items: data.items`를 포함한다. 단일 항목 응답은 기존 `doctorOpinion`/`pharmacistOpinion`/`alternatives` 저장 동작을 유지한다.
+- [x] 테스트: `Main05.tsx`는 `items`가 있는 복합 항목 결과에서 top-level `doctorOpinion`/`pharmacistOpinion`이 없어도 "분석 결과 형식이 올바르지 않습니다."로 빠지지 않고 항목별 결과를 렌더한다.
+- [x] `Main05.tsx`: 결과 형식 검증을 단일 항목 경로와 복합 항목 경로로 분리한다. `items.length > 0`이면 top-level opinion 필수 검증을 건너뛴다.
+
+#### H-9-2. 복합 항목 이력 저장/복원 보완
+
+- [x] 테스트: `backend/tests/test_history.py`에서 POST `/history`가 `items` 배열을 포함한 복합 항목 분석 결과를 저장하고 GET `/history/{id}`가 `items`를 반환한다.
+- [x] `backend/app/routers/history.py`: `HistoryCreate`에 옵셔널 `items` 필드를 추가하고, `items`가 있으면 top-level `doctorOpinion`/`pharmacistOpinion` 없이도 저장 가능하게 한다.
+- [x] 테스트: `Main04.tsx`가 복합 항목 분석 완료 후 POST `/history` body에 `items`를 포함한다.
+- [x] `Main04.tsx`: history 저장 body에 `items`를 포함한다. 단일 항목 history body는 기존 스키마를 유지한다.
+- [x] 테스트: `Sub04.tsx`에서 복합 항목 이력 카드를 탭하면 GET `/history/{id}` 응답의 `items`가 `analyzeStore.result.items`에 복원된다.
+- [x] `Sub04.tsx`: 이력 상세 복원 시 `items: data.items`를 포함한다.
+
+#### H-9-3. 복합 항목 self-evaluate retry 상태 보존
+
+- [x] 테스트: `run_agent`에서 1차 복합 항목 `finish` 결과가 `evaluate()` 실패 후 retry될 때, 다음 episode가 바로 `analyze`를 선택해도 이전 `validate_query.items`를 사용해 `run_sub_agents`를 다시 호출한다.
+- [x] `harness.py`: episode 사이에 검증된 `items` 상태를 보존한다. `_run_episode`가 `items`를 입력/출력하거나 shared state를 받도록 가장 작은 구조 변경을 먼저 적용한다.
+- [x] 테스트: retry 후 최종 `finish` 결과가 복합 항목 `items`와 최고 위험도 `level`을 유지한다.
+- [x] `harness.py`: self-evaluate 메시지에 보완해야 할 이슈뿐 아니라 복합 항목 목록도 명시해 모델이 단일 분석으로 흐르지 않게 한다.
+
+#### H-9-4. Gemini tool-call 부재/비허용 action 안정성 보완
+
+- [x] 테스트: `_call_with_tools`가 Gemini 응답에서 `function_calls`가 비어 있는 경우 `("error", {"message": ...})` 또는 전용 예외처럼 하네스가 처리 가능한 실패를 반환/발생시킨다.
+- [x] `harness.py`: function call이 없을 때 `IndexError`로 500이 나지 않도록 명시적 오류 경로를 추가한다.
+- [x] 테스트: `_call_with_tools`가 allowed_actions 밖의 action을 반환한 경우 `run_agent`가 미처리 예외 대신 `{ type: "error", message }` 형태로 종료한다.
+- [x] `harness.py`: `execute_tool`의 `PermissionError`를 episode 단위에서 잡아 trace에 기록하고 error observation으로 종료한다.
+- [x] 테스트: `/analyze` 통합 테스트에서 tool-call 부재 또는 비허용 action 시 응답 `type`이 `"error"`이고 metrics 기록이 실패 예외가 아닌 정상 응답 경로로 남는다.
+
+### H-10. Harness 2차 리뷰 후속 보완 — 항목별 평가 / error 정규화 / sub-agent 실패 방어 / dispatch 테스트 정합성
+
+> 2차 코드 리뷰에서 발견한 하네스 내부 품질·안정성 이슈를 TDD 방식으로 보완한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+> 구조 변경과 동작 변경을 섞지 않는다. 테스트 신뢰도를 높이는 정리 작업은 동작 변경 전에 작게 수행한다.
+
+#### H-10-1. 복합 항목 evaluate()를 항목별 품질 검증으로 강화
+
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item의 `doctorOpinion.detail` 또는 `pharmacistOpinion.detail`이 2문장 미만이면 다른 item이 충분해도 실패한다.
+- [x] `harness.py`: `evaluate()`의 복합 항목 경로를 item별로 순회하며 detail 문장 수를 각각 검사한다.
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item에 복용 시간·간격 등 행동 지침 키워드가 없으면 실패한다.
+- [x] `harness.py`: 복합 항목의 행동 지침 키워드 검사를 item별 combined detail 기준으로 수행한다.
+- [x] 테스트: `evaluate()`는 복합 항목 결과에서 한 item에 의사·약사 상담 권유 문구가 없으면 실패한다.
+- [x] `harness.py`: 복합 항목의 상담 권유 키워드 검사를 item별 combined detail 기준으로 수행한다.
+- [x] 테스트: 모든 item이 detail 2문장 이상, 행동 지침, 상담 권유를 충족하면 복합 항목 `evaluate()`가 통과한다.
+
+#### H-10-2. error action 결과 정규화
+
+- [x] 테스트: `_call_with_tools` 또는 mock agent가 `("error", {"message": "실패"})`처럼 `type` 없는 error args를 반환해도 `run_agent()` 최종 결과는 `{ type: "error", message: "실패" }`가 된다.
+- [x] `harness.py`: `_run_episode()`의 `action_name == "error"` 분기에서 observation을 항상 `{ type: "error", message }` 형태로 정규화한다.
+- [x] 테스트: `/analyze`는 type 없는 error args가 하네스에서 반환되는 경우에도 `"clarification"`으로 fallback하지 않고 `"error"`를 반환한다.
+
+#### H-10-3. sub-agent 실패를 하네스 error로 흡수
+
+- [x] 테스트: 복합 항목 분석 중 `_run_sub_agents_sync()`가 예외를 던지면 `run_agent()`가 미처리 예외 대신 `{ type: "error", message, trace }`를 반환한다.
+- [x] `harness.py`: multi-item `analyze` 경로에서 sub-agent 예외를 잡아 error observation으로 trace에 기록하고 episode를 종료한다.
+- [x] 테스트: sub-agent 실패 시 `/analyze` 응답은 HTTP 200 + `{ type: "error" }`이며 metrics는 실패 예외가 아닌 정상 응답 경로로 기록된다.
+
+#### H-10-4. execute_tool dispatch 테스트 정합성 보완
+
+- [x] 테스트 정리: `test_execute_tool_calls_matching_tool_function`이 `module.ask_clarification` monkeypatch에 의존하지 않고 `_TOOL_FUNCTIONS["ask_clarification"]` dispatch를 직접 검증하도록 변경한다.
+- [x] 테스트: `_TOOL_FUNCTIONS`에 선언된 모든 action 이름이 `HARNESS_POLICY["allowed_actions"]`에 포함되고, `TOOL_DECLARATIONS` 이름과도 일치한다.
+- [x] 필요 시 `harness.py`: dispatch table 생성 방식 또는 테스트 fixture를 정리하되 런타임 동작은 변경하지 않는다.
+
+### H-11. evaluate()를 LLM-as-Judge 기반으로 전환
+
+> 키워드/문장 수 기반 휴리스틱 채점을 `scripts/interaction_eval.py`의 `JUDGE_SCHEMA`/`JUDGE_RULES`와
+> 동일한 패턴의 LLM-as-judge로 대체한다. `evaluate`는 여전히 agent가 선택하는 tool이 아니며,
+> `run_agent()`가 `finish` 직후 자동으로 호출하는 하네스 내부 품질 게이트로 유지한다.
+> 원칙은 `tdd.md`를 따른다: 각 체크박스는 테스트 1개 작성(Red) → 최소 구현(Green) → 필요하면 구조 정리(Refactor) 순서로 진행한다.
+
+#### H-11-1. _generate_judge 추가
+
+- [x] `tools.py`에 `_JUDGE_SCHEMA` 정의 — `factuality`/`readability`/`usefulness`/`schema`(각 1~5 정수), `rationale`(string), `jargon_terms_found`(string[])
+- [x] 테스트: `_generate_judge(question, candidate)`가 `_client.models.generate_content`를 `MODEL`/`_JUDGE_SCHEMA`로 호출하고 `response.text`를 `json.loads`해 반환한다 (mock)
+- [x] `tools.py`에 `_generate_judge(question, candidate) -> dict` 구현 — `_generate_validation`과 동일 패턴, `JUDGE_RULES`를 한국어로 차용한 프롬프트에 `question`+`result`(JSON)만 포함 (시나리오 프로필 없음, level 적정성 평가 제외)
+
+#### H-11-2. evaluate()를 judge 기반으로 재작성
+
+- [x] 테스트: `evaluate()`가 `_generate_judge`를 호출해 4개 항목 평균 × 20을 `score`로 산출하고 `score >= 70`이면 `passed=True`
+- [x] `harness.py`: `evaluate()`를 `_generate_judge` 호출 결과 기반으로 재작성 (`score = round(avg(4개 항목) * 20)`), 시그니처/리턴 타입(`passed, score, issues`)은 유지
+- [x] 테스트: 4개 채점 항목 중 4점 미만인 항목이 있으면 해당 항목에 대한 한국어 안내 문구가 `issues`에 포함된다
+- [x] `harness.py`: 4점 미만 항목별 한국어 issue 문구 매핑 추가
+- [x] 테스트: `jargon_terms_found`가 비어있지 않으면 "다음 의학 용어를 쉬운 말로 풀어 설명하세요: ..." issue가 `issues`에 추가된다
+- [x] `harness.py`: `jargon_terms_found` 기반 issue 추가
+- [x] 테스트: `_generate_judge`가 예외를 던지면 `evaluate()`는 `(True, 100, [])`을 반환한다 (fail-open)
+- [x] `harness.py`: `evaluate()`에 try/except로 fail-open 처리 추가
+- [x] 테스트: 복합 항목(`items`) 결과도 단일 결과와 동일한 코드 경로로 `_generate_judge`에 전달되어 1회 호출로 평가된다 (단일/복합 분기 없음)
+
+#### H-11-3. 기존 키워드 기반 로직 제거 및 테스트 정리
+
+- [x] `harness.py`에서 `_sentence_count`, `_ACTION_GUIDANCE_KEYWORDS`, `_CONSULTATION_KEYWORDS`, `re` import, `evaluate()`의 `items` 유무 분기 처리를 모두 제거한다
+- [x] 기존 `evaluate()` 테스트 6개(`test_evaluate_short_detail_scores_below_70` 등)를 `_generate_judge` monkeypatch 기반으로 재작성한다

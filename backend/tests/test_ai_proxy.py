@@ -7,7 +7,7 @@ from app.main import app
 
 client = TestClient(app)
 
-AI_SERVER_URL = "http://ai-server:8001"
+AI_SERVER_URL = "http://localhost:8001"
 
 
 def make_httpx_response(json_data: dict, status_code: int = 200):
@@ -60,6 +60,22 @@ class TestOcrProxy:
     def test_ocr_no_image_returns_422(self):
         response = client.post("/ocr")
         assert response.status_code == 422
+
+    def test_ocr_returns_502_when_ai_server_unreachable(self):
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(side_effect=httpx.ConnectError("name resolution failed"))
+            mock_client_cls.return_value = mock_client
+
+            response = client.post(
+                "/ocr",
+                files={"image": ("test.jpg", b"fake image bytes", "image/jpeg")},
+            )
+
+        assert response.status_code == 502
+        assert "AI server connection failed" in response.json()["detail"]
 
 
 class TestLabelProxy:
@@ -154,3 +170,26 @@ class TestAnalyzeProxy:
     def test_analyze_missing_question_returns_422(self):
         response = client.post("/analyze", json={})
         assert response.status_code == 422
+
+    def test_analyze_proxy_uses_extended_timeout(self):
+        mock_response = make_httpx_response({
+            "level": "safe",
+            "doctorOpinion": {"summary": "안전", "detail": ""},
+            "pharmacistOpinion": {"summary": "안전", "detail": ""},
+            "alternatives": [],
+        })
+
+        with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_client_cls.return_value = mock_client
+
+            client.post(
+                "/analyze",
+                json={"question": "아스피린과 커피", "context": ""},
+            )
+
+        _, kwargs = mock_client_cls.call_args
+        assert kwargs["timeout"] == pytest.approx(120.0)

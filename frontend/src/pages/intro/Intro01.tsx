@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StatusBar from '../../components/StatusBar'
 
@@ -20,14 +21,14 @@ function FaceIllustration() {
 
 export default function Intro01() {
   const navigate = useNavigate()
-  let touchStartX = 0
+  const touchStartX = useRef(0)
 
   return (
     <div
       data-testid="page-intro-01"
-      onTouchStart={(e) => { touchStartX = e.touches[0].clientX }}
+      onTouchStart={(e) => { touchStartX.current = e.touches[0].clientX }}
       onTouchEnd={(e) => {
-        const dx = e.changedTouches[0].clientX - touchStartX
+        const dx = e.changedTouches[0].clientX - touchStartX.current
         if (dx < -80) navigate('/intro-02')
       }}
       style={{

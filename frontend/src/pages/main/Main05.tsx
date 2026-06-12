@@ -50,7 +50,10 @@ export default function Main05() {
     )
   }
 
-  if (!result.doctorOpinion || !result.pharmacistOpinion) {
+  const { level, doctorOpinion, pharmacistOpinion, alternatives = [], items } = result
+  const hasItems = Boolean(items && items.length > 0)
+
+  if (!hasItems && (!doctorOpinion || !pharmacistOpinion)) {
     return (
       <div data-testid="page-main-05" style={{ padding: 22 }}>
         분석 결과 형식이 올바르지 않습니다.
@@ -58,16 +61,18 @@ export default function Main05() {
     )
   }
 
-  const { level, doctorOpinion, pharmacistOpinion, alternatives } = result
   const banner = getBannerConfig(level)
   const showAlternatives = level === 'caution' || level === 'danger'
   const showExpertButton = level === 'danger'
+  const displayDoctorOpinion = doctorOpinion ?? { summary: '', detail: '' }
+  const displayPharmacistOpinion = pharmacistOpinion ?? { summary: '', detail: '' }
+  const shareSummary = doctorOpinion?.summary ?? items?.map((item) => item.name).join(', ') ?? ''
 
   async function handleShare() {
     try {
       await navigator.share({
         title: '캔아이필 분석 결과',
-        text: `${banner.label}: ${doctorOpinion.summary}`,
+        text: `${banner.label}: ${shareSummary}`,
       })
     } catch {
       // ignore
@@ -138,6 +143,73 @@ export default function Main05() {
         </div>
 
         <div style={{ paddingLeft: 22, paddingRight: 22, paddingTop: 18 }}>
+          {items && items.length > 0 ? (
+            <div style={{ marginBottom: 16 }}>
+              {items.map((item) => {
+                const itemShowAlternatives = item.level === 'caution' || item.level === 'danger'
+                return (
+                  <div key={item.name} style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#1A1B22', marginBottom: 10 }}>
+                      {item.name}
+                    </div>
+                    <div style={{
+                      backgroundColor: '#F8F8FA',
+                      borderRadius: 12,
+                      padding: '12px 14px',
+                      marginBottom: 8,
+                      fontSize: 14,
+                      color: '#3F4046',
+                      lineHeight: 1.5,
+                    }}>
+                      <div><strong>의사 의견:</strong> {item.doctorOpinion.summary}</div>
+                      <div style={{ marginTop: 6, fontSize: 13, color: '#666' }}>{item.doctorOpinion.detail}</div>
+                    </div>
+                    <div style={{
+                      backgroundColor: '#F8F8FA',
+                      borderRadius: 12,
+                      padding: '12px 14px',
+                      marginBottom: 8,
+                      fontSize: 14,
+                      color: '#3F4046',
+                      lineHeight: 1.5,
+                    }}>
+                      <div><strong>약사 의견:</strong> {item.pharmacistOpinion.summary}</div>
+                      <div style={{ marginTop: 6, fontSize: 13, color: '#666' }}>{item.pharmacistOpinion.detail}</div>
+                    </div>
+                    {itemShowAlternatives && item.alternatives.length > 0 && (
+                      <div style={{
+                        backgroundColor: '#E8F5E9',
+                        borderRadius: 16,
+                        padding: '16px 18px',
+                      }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: '#388E3C', marginBottom: 10, lineHeight: '19px' }}>
+                          대신 이런 건 드셔도 돼요
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {item.alternatives.map((alt, i) => (
+                            <div key={i} style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              fontSize: 13,
+                              color: '#388E3C',
+                              backgroundColor: 'rgba(255,255,255,0.7)',
+                              borderRadius: 20,
+                              padding: '8px 12px',
+                            }}>
+                              <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#388E3C', display: 'inline-block', flexShrink: 0 }} />
+                              {alt}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <>
           {/* 의사 의견 */}
           <div style={{ marginBottom: 20 }}>
             <button
@@ -160,7 +232,7 @@ export default function Main05() {
                 alignItems: 'center',
               }}
             >
-              <span><strong>의사 의견:</strong> {doctorOpinion.summary}</span>
+              <span><strong>의사 의견:</strong> {displayDoctorOpinion.summary}</span>
               <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
             </button>
             {showDetail && (
@@ -172,7 +244,7 @@ export default function Main05() {
                 color: '#666',
                 lineHeight: 1.5,
               }}>
-                {doctorOpinion.detail}
+                {displayDoctorOpinion.detail}
               </div>
             )}
           </div>
@@ -199,7 +271,7 @@ export default function Main05() {
                 alignItems: 'center',
               }}
             >
-              <span><strong>약사 의견:</strong> {pharmacistOpinion.summary}</span>
+              <span><strong>약사 의견:</strong> {displayPharmacistOpinion.summary}</span>
               <span style={{ fontSize: 12, color: '#999' }}>{showDetail ? '▼' : '▶'}</span>
             </button>
             {showDetail && (
@@ -211,7 +283,7 @@ export default function Main05() {
                 color: '#666',
                 lineHeight: 1.5,
               }}>
-                {pharmacistOpinion.detail}
+                {displayPharmacistOpinion.detail}
               </div>
             )}
           </div>
@@ -260,6 +332,8 @@ export default function Main05() {
               </div>
               <div style={{ fontSize: 13, color: '#388E3C' }}>추천 대안이 없습니다.</div>
             </div>
+          )}
+            </>
           )}
 
           {/* 버튼들 */}

@@ -1,4 +1,5 @@
-export interface AnalyzeResult {
+export interface AnalyzeItem {
+  name: string
   level: 'safe' | 'caution' | 'danger'
   doctorOpinion: {
     summary: string
@@ -11,10 +12,37 @@ export interface AnalyzeResult {
   alternatives: string[]
 }
 
+export interface AnalyzeResult {
+  level: 'safe' | 'caution' | 'danger'
+  doctorOpinion?: {
+    summary: string
+    detail: string
+  }
+  pharmacistOpinion?: {
+    summary: string
+    detail: string
+  }
+  alternatives?: string[]
+  items?: AnalyzeItem[]
+}
+
+export type AnalyzeResponseType = 'analysis' | 'clarification' | 'rejection' | 'error' | 'registration_required' | null
+
 export const analyzeStore: {
   question: string
   result: AnalyzeResult | null
+  responseType: AnalyzeResponseType
+  message: string | null
+  clarificationPrompt: string | null
 } = {
   question: '',
   result: null,
+  responseType: null,
+  message: null,
+  clarificationPrompt: null,
+}
+
+export function setAnalyzeFromHistory(question: string, result: AnalyzeResult) {
+  analyzeStore.question = question
+  analyzeStore.result = result
 }
