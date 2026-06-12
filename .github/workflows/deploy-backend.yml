@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - harness
     paths:
       - "backend/**"
       - ".github/workflows/deploy-backend.yml"
