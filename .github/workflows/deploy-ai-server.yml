@@ -48,15 +48,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             "${{ secrets.GCP_AI_USER }}@${{ secrets.GCP_AI_HOST }}" <<'EOF'
           set -euo pipefail
-          if ! command -v docker >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y docker.io
-          fi
-          sudo systemctl enable --now docker
           cd ~/can-i-pill/ai_server
-          sudo docker build -t can-i-pill-ai .
-          sudo docker rm -f ai-server >/dev/null 2>&1 || true
-          sudo docker run -d \
+          docker build -t can-i-pill-ai .
+          docker rm -f ai-server >/dev/null 2>&1 || true
+          docker run -d \
             --restart unless-stopped \
             --name ai-server \
             -p 8001:8001 \

@@ -49,15 +49,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             "${{ secrets.GCP_BACKEND_USER }}@${{ secrets.GCP_BACKEND_HOST }}" <<'EOF'
           set -euo pipefail
-          if ! command -v docker >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y docker.io
-          fi
-          sudo systemctl enable --now docker
           cd ~/can-i-pill/backend
-          sudo docker build -t can-i-pill-backend .
-          sudo docker rm -f backend >/dev/null 2>&1 || true
-          sudo docker run -d \
+          docker build -t can-i-pill-backend .
+          docker rm -f backend >/dev/null 2>&1 || true
+          docker run -d \
             --restart unless-stopped \
             --name backend \
             -p 8000:8000 \
