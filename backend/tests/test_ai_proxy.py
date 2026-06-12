@@ -263,17 +263,17 @@ class TestLogsProxy:
         assert response.status_code == 200
         assert response.json() == expected
 
-    def test_logs_requests_proxy_forwards_limit_query_param(self):
+    def test_logs_requests_proxy_forwards_pagination_query_params(self):
         mock_response = make_httpx_response({"requests": []})
 
         with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
             mock_client = patched_get_client(mock_response)
             mock_client_cls.return_value = mock_client
 
-            client.get("/logs/requests?limit=10")
+            client.get("/logs/requests?limit=10&offset=20")
 
         _, kwargs = mock_client.get.call_args
-        assert kwargs["params"] == {"limit": 10}
+        assert kwargs["params"] == {"limit": 10, "offset": 20}
 
     def test_logs_analyze_proxy_forwards_to_ai_server(self):
         expected = {"logs": [{"question": "아스피린과 커피"}]}
@@ -287,14 +287,14 @@ class TestLogsProxy:
         assert response.status_code == 200
         assert response.json() == expected
 
-    def test_logs_analyze_proxy_forwards_limit_query_param(self):
+    def test_logs_analyze_proxy_forwards_pagination_query_params(self):
         mock_response = make_httpx_response({"logs": []})
 
         with patch("app.routers.ai_proxy.httpx.AsyncClient") as mock_client_cls:
             mock_client = patched_get_client(mock_response)
             mock_client_cls.return_value = mock_client
 
-            client.get("/logs/analyze?limit=5")
+            client.get("/logs/analyze?limit=5&offset=15")
 
         _, kwargs = mock_client.get.call_args
-        assert kwargs["params"] == {"limit": 5}
+        assert kwargs["params"] == {"limit": 5, "offset": 15}

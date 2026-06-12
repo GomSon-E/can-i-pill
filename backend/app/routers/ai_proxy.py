@@ -87,12 +87,18 @@ async def metrics():
 
 
 @router.get("/logs/requests")
-async def logs_requests(limit: int = 50):
-    response = await _get_from_ai_server("/logs/requests", params={"limit": limit})
+async def logs_requests(limit: int = 50, offset: int = 0):
+    response = await _get_from_ai_server(
+        "/logs/requests",
+        params={"limit": limit, "offset": offset},
+    )
     return JSONResponse(content=response.json(), status_code=response.status_code)
 
 
 @router.get("/logs/analyze")
-async def logs_analyze(limit: int = 50):
-    response = await _get_from_ai_server("/logs/analyze", params={"limit": limit})
+async def logs_analyze(limit: int = 50, offset: int = 0):
+    response = await _get_from_ai_server(
+        "/logs/analyze",
+        params={"limit": limit, "offset": offset},
+    )
     return JSONResponse(content=response.json(), status_code=response.status_code)
