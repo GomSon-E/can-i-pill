@@ -44,3 +44,20 @@ jobs:
           npm run lint
           npm run test
           npm run build
+
+  build-verify:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t can-i-pill-backend-ci ./backend
+
+      - name: Build AI server image
+        run: docker build -t can-i-pill-ai-ci ./ai_server
+
+      - name: Build frontend image
+        run: docker build --build-arg BACKEND_HOST=backend -t can-i-pill-frontend-ci ./frontend
