@@ -29,3 +29,10 @@ def test_ai_mock_mode_flag_is_enabled():
 
 def test_client_is_none_in_mock_mode():
     assert ai_router._client is None
+
+
+def test_ocr_returns_mock_response_in_mock_mode():
+    with open("tests/dummy_image.png", "rb") as f:
+        response = client.post("/ocr", files={"image": f})
+    assert response.status_code == 200
+    assert response.json() == MOCK_OCR_RESPONSE

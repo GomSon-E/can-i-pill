@@ -11,6 +11,7 @@ from app.analyze_logs import record_analyze_log
 from app.concurrency import GEMINI_SEMAPHORE
 from app.metrics import record_metric
 from app.harness import harness
+from app.mock_responses import MOCK_OCR_RESPONSE, MOCK_LABEL_RESPONSE, MOCK_ANALYZE_RESPONSE
 
 
 def _load_env():
@@ -81,6 +82,8 @@ _OCR_PROMPT = (
 
 @router.post("/ocr")
 async def ocr(image: UploadFile = File(...)):
+    if AI_MOCK_MODE:
+        return MOCK_OCR_RESPONSE
     image_bytes = await image.read()
     start = time.monotonic()
     try:
