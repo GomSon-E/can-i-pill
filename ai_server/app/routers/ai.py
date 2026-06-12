@@ -221,6 +221,8 @@ async def label(image: UploadFile = File(...)):
 
 @router.post("/analyze")
 async def analyze(body: AnalyzeRequest):
+    if AI_MOCK_MODE:
+        return MOCK_ANALYZE_RESPONSE
     start = time.monotonic()
     try:
         async with GEMINI_SEMAPHORE:

@@ -43,3 +43,9 @@ def test_label_returns_mock_response_in_mock_mode():
         response = client.post("/label", files={"image": f})
     assert response.status_code == 200
     assert response.json() == MOCK_LABEL_RESPONSE
+
+
+def test_analyze_returns_mock_response_in_mock_mode():
+    response = client.post("/analyze", json={"question": "test", "context": ""})
+    assert response.status_code == 200
+    assert response.json() == MOCK_ANALYZE_RESPONSE
