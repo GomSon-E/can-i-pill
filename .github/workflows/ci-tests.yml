@@ -132,4 +132,4 @@ jobs:
 
       - name: Stop services
         if: always()
-        run: docker compose down
+        run: APP_ENV_FILE=.env.ci docker compose down
