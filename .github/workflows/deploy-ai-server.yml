@@ -49,6 +49,7 @@ jobs:
             "${{ secrets.GCP_AI_USER }}@${{ secrets.GCP_AI_HOST }}" <<'EOF'
           set -euo pipefail
           cd ~/can-i-pill/ai_server
+          mkdir -p ~/can-i-pill-ai-data
           docker build -t can-i-pill-ai .
           docker rm -f ai-server >/dev/null 2>&1 || true
           docker run -d \
@@ -56,6 +57,9 @@ jobs:
             --name ai-server \
             -p 8001:8001 \
             --env-file .env \
+            -e AI_METRICS_CSV_PATH=/app/data/metrics.csv \
+            -e AI_ANALYZE_LOGS_PATH=/app/data/analyze_logs.jsonl \
+            -v ~/can-i-pill-ai-data:/app/data \
             can-i-pill-ai
           curl -fsS --retry 5 --retry-delay 2 --retry-all-errors http://localhost:8001/health
           EOF

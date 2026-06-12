@@ -62,6 +62,17 @@ class TestDockerCompose:
         assert "env_file" in content or ".env" in content
 
 
+class TestAiServerDeployWorkflow:
+    WORKFLOW = os.path.join(ROOT, ".github", "workflows", "deploy-ai-server.yml")
+
+    def test_persists_monitoring_data(self):
+        content = open(self.WORKFLOW).read()
+        assert "mkdir -p ~/can-i-pill-ai-data" in content
+        assert "-v ~/can-i-pill-ai-data:/app/data" in content
+        assert "AI_METRICS_CSV_PATH=/app/data/metrics.csv" in content
+        assert "AI_ANALYZE_LOGS_PATH=/app/data/analyze_logs.jsonl" in content
+
+
 class TestBackendDockerfile:
     DOCKERFILE = os.path.join(ROOT, "backend", "Dockerfile")
 
