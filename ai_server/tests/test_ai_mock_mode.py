@@ -18,3 +18,14 @@ def test_mock_label_response_has_expected_shape():
 def test_mock_analyze_response_has_expected_shape():
     assert MOCK_ANALYZE_RESPONSE["level"] == "caution"
     assert MOCK_ANALYZE_RESPONSE["doctorOpinion"]["summary"] == "Mock 의사 의견"
+
+
+from app.routers import ai as ai_router
+
+
+def test_ai_mock_mode_flag_is_enabled():
+    assert ai_router.AI_MOCK_MODE is True
+
+
+def test_client_is_none_in_mock_mode():
+    assert ai_router._client is None

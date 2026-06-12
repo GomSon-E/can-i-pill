@@ -29,7 +29,12 @@ _load_env()
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+AI_MOCK_MODE = os.environ.get("AI_MOCK_MODE", "").lower() == "true"
+
+if AI_MOCK_MODE:
+    _client = None
+else:
+    _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 MODEL = "gemini-3.1-flash-lite"
 
 
