@@ -61,3 +61,75 @@ jobs:
 
       - name: Build frontend image
         run: docker build --build-arg BACKEND_HOST=backend -t can-i-pill-frontend-ci ./frontend
+
+  integration-test:
+    needs: build-verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write CI env file
+        run: |
+          cat > .env.ci <<'EOF'
+          GEMINI_API_KEY=dummy-ci-key
+          AI_MOCK_MODE=true
+          EOF
+
+      - name: Start services
+        run: APP_ENV_FILE=.env.ci docker compose up -d --build ai_server backend
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health; then exit 0; fi
+            sleep 2
+          done
+          echo "backend did not become healthy in time" >&2
+          exit 1
+
+      - name: Verify /ocr proxy returns mock prescription
+        run: |
+          curl -fsS -X POST http://localhost:8000/ocr -F "image=@backend/tests/dummy_image.png" -o /tmp/ocr.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("/tmp/ocr.json"))
+          assert "name" in data
+          assert isinstance(data["drugs"], list) and len(data["drugs"]) > 0
+          drug = data["drugs"][0]
+          for key in ["name", "dosage", "frequency", "days", "usage", "cautions"]:
+              assert key in drug
+          EOF
+
+      - name: Verify /label proxy returns mock supplement
+        run: |
+          curl -fsS -X POST http://localhost:8000/label -F "image=@backend/tests/dummy_image.png" -o /tmp/label.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("/tmp/label.json"))
+          assert "name" in data
+          assert isinstance(data["nutrients"], list) and len(data["nutrients"]) > 0
+          nutrient = data["nutrients"][0]
+          for key in ["ingredient", "amount", "unit"]:
+              assert key in nutrient
+          EOF
+
+      - name: Verify /analyze proxy returns mock analysis
+        run: |
+          curl -fsS -X POST http://localhost:8000/analyze \
+            -H "Content-Type: application/json" \
+            -d '{"question":"test","context":""}' \
+            -o /tmp/analyze.json
+          python3 - <<'EOF'
+          import json
+          data = json.load(open("/tmp/analyze.json"))
+          assert data["level"] in ["safe", "caution", "danger"]
+          assert "summary" in data["doctorOpinion"]
+          assert "summary" in data["pharmacistOpinion"]
+          assert isinstance(data["alternatives"], list)
+          EOF
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
